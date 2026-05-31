@@ -1,17 +1,14 @@
-from openai import OpenAI
-from dotenv import load_dotenv
-import os
-
-load_dotenv()
-
-client = OpenAI(
-    api_key=os.getenv("OPENAI_API_KEY")
-)
+from agents.data_validation import prepare_sales_dataframe
+from services.openai_service import OpenAIService
 
 
 class SalesAgent:
+    def __init__(self):
+        service = OpenAIService()
+        self.client = service.get_client()
 
     def analyze_sales(self, dataframe):
+        dataframe = prepare_sales_dataframe(dataframe)
 
         total_sales = dataframe["vendas"].sum()
 
@@ -36,7 +33,7 @@ class SalesAgent:
         - recomendações de crescimento.
         """
 
-        response = client.chat.completions.create(
+        response = self.client.chat.completions.create(
             model="gpt-4.1-mini",
 
             messages=[

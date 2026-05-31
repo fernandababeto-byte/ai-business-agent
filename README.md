@@ -240,7 +240,80 @@ Crie um arquivo `.env`
 ```env
 OPENAI_API_KEY=sua_chave_openai
 GROQ_API_KEY=sua_chave_groq
+POSTGRES_PASSWORD=uma_senha_forte
+JWT_SECRET_KEY=um_segredo_forte
+BOOTSTRAP_ADMIN_EMAIL=admin@suaempresa.com
+BOOTSTRAP_ADMIN_PASSWORD=uma_senha_forte
 ```
+
+## SaaS Multi-Cliente
+
+O primeiro cliente e o primeiro administrador sao criados automaticamente a partir das variaveis `BOOTSTRAP_TENANT_*` e `BOOTSTRAP_ADMIN_*`.
+
+Depois do primeiro login, usuarios com papel `owner` ou `admin` podem cadastrar novos clientes SaaS pelo dashboard.
+
+## Shopify OAuth
+
+Para conectar lojas reais, crie um app no Shopify Partner Dashboard e configure no `.env`:
+
+```env
+SHOPIFY_CLIENT_ID=sua_client_id
+SHOPIFY_CLIENT_SECRET=sua_client_secret
+SHOPIFY_APP_URL=https://seu-dominio-api.com
+DASHBOARD_URL=https://seu-dashboard.com
+SHOPIFY_SCOPES=read_orders,read_products,read_inventory,read_locations,read_customers
+```
+
+No app da Shopify, configure a URL de callback:
+
+```text
+https://seu-dominio-api.com/shopify/callback
+```
+
+Em desenvolvimento local, o callback `http://localhost:8000/shopify/callback` so funciona se a Shopify conseguir acessar sua maquina via tunel publico.
+
+## Deploy de teste gratuito no Render
+
+O arquivo `render.yaml` cria dois Web Services gratuitos e um Postgres gratuito:
+
+- `revenue-os-api`
+- `revenue-os-dashboard`
+- `revenue-os-db`
+
+O deploy gratuito serve para testes online. Os Web Services gratuitos podem hibernar quando ficam sem uso e o Postgres gratuito expira apos 30 dias. Antes de receber clientes pagantes, migre para instancias pagas e configure um dominio proprio.
+
+No Render, crie um Blueprint a partir deste repositorio. Durante a criacao, preencha:
+
+```text
+DASHBOARD_URL=https://revenue-os-dashboard.onrender.com
+SHOPIFY_APP_URL=https://revenue-os-api.onrender.com
+API_BASE_URL=https://revenue-os-api.onrender.com
+```
+
+Preencha tambem as credenciais Shopify, Resend, Twilio e o primeiro administrador. Nunca coloque segredos diretamente no arquivo `render.yaml`.
+
+Depois que o deploy terminar, crie uma nova versao do app no Shopify Dev Dashboard com:
+
+```text
+URL do app: https://revenue-os-api.onrender.com
+URL de redirecionamento: https://revenue-os-api.onrender.com/shopify/callback
+```
+
+Por fim, abra:
+
+```text
+https://revenue-os-dashboard.onrender.com
+```
+
+## Planos SaaS
+
+O produto deve ser posicionado como um AI Revenue Operating System premium para Shopify. Nao existe plano abaixo de US$99/mes.
+
+- Revenue Intelligence: US$99/mes, com dashboard executivo, monitoring, risk center, revenue advisor e forecast engine.
+- Growth Intelligence: US$199/mes, com alertas automaticos, relatorios executivos, monitoring avancado e priorizacao de oportunidades.
+- Revenue OS: US$399/mes, com multi-store Shopify, executive reports, recomendacoes avancadas e suporte prioritario.
+
+Trial padrao: 14 dias gratis, sem cartao.
 
 ---
 

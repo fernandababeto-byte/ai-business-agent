@@ -1,17 +1,14 @@
-from openai import OpenAI
-from dotenv import load_dotenv
-import os
-
-load_dotenv()
-
-client = OpenAI(
-    api_key=os.getenv("OPENAI_API_KEY")
-)
+from agents.data_validation import prepare_sales_dataframe
+from services.openai_service import OpenAIService
 
 
 class FinanceAgent:
+    def __init__(self):
+        service = OpenAIService()
+        self.client = service.get_client()
 
     def analyze_finance(self, dataframe):
+        dataframe = prepare_sales_dataframe(dataframe)
 
         total_sales = dataframe["vendas"].sum()
 
@@ -19,9 +16,10 @@ class FinanceAgent:
 
         estimated_profit = total_sales - estimated_cost
 
-        profit_margin = (
-            estimated_profit / total_sales
-        ) * 100
+        if total_sales > 0:
+            profit_margin = (estimated_profit / total_sales) * 100
+        else:
+            profit_margin = 0
 
         prompt = f"""
         Você é um diretor financeiro empresarial.
@@ -46,7 +44,7 @@ class FinanceAgent:
         - recomendações executivas.
         """
 
-        response = client.chat.completions.create(
+        response = self.client.chat.completions.create(
 
             model="gpt-4.1-mini",
 

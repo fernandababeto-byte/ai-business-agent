@@ -23,19 +23,6 @@ from src.machine_learning import (
     prever_vendas
 )
 
-from visualization import (
-    grafico_lucro,
-    grafico_vendas,
-    grafico_custos,
-    dashboard_comparativo
-)
-
-from machine_learning import (
-    treinar_modelo,
-    prever_vendas
-)
-
-
 # ==========================================
 # LEITURA DOS DADOS
 # ==========================================

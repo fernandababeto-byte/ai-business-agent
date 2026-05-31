@@ -1,3 +1,4 @@
+from agents.data_validation import prepare_sales_dataframe
 from services.groq_service import GroqService
 
 
@@ -7,6 +8,8 @@ class ExecutiveAgent:
         self.client = service.get_client()
 
     def generate_executive_report(self, dataframe):
+        dataframe = prepare_sales_dataframe(dataframe)
+
         total_sales = dataframe["vendas"].sum()
         average_sales = dataframe["vendas"].mean()
 

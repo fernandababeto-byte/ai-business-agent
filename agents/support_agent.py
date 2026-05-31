@@ -14,7 +14,10 @@ class SupportAgent:
         question,
         dataframe: pd.DataFrame
     ):
+        if dataframe is None or dataframe.empty:
+            return "Nenhum dado valido encontrado para analise."
 
+        dataframe = dataframe.copy()
         dataframe.columns = [
             col.lower().strip()
             for col in dataframe.columns
@@ -41,6 +44,14 @@ class SupportAgent:
             Colunas disponíveis:
             {list(dataframe.columns)}
             """
+
+        dataframe[revenue_column] = pd.to_numeric(
+            dataframe[revenue_column],
+            errors="coerce"
+        )
+        dataframe = dataframe.dropna(subset=[revenue_column])
+        if dataframe.empty:
+            return "Nenhuma linha com receita valida foi encontrada."
 
         total_sales = dataframe[revenue_column].sum()
 
