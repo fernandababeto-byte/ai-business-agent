@@ -1811,18 +1811,67 @@ def render_revenue_risk_center(ctx):
     risk_category = html.escape(str(ctx["shopify_risk_category"]))
     live_risk_score = ctx.get("shopify_live_risk_score")
     operational_risk = min(100, max(0, float(live_risk_score or 0)))
+    snapshot = ctx.get("shopify_live_snapshot") or {}
+    payload = snapshot.get("payload") or {}
+    comparison = payload.get("sync_comparison") or {}
+    products = payload.get("products") or []
+    currency_code = snapshot.get("currency_code") or "BRL"
+    low_inventory_products = sum(
+        int(product.get("totalInventory") or 0) <= 10
+        for product in products
+    )
+    low_inventory_rate = (
+        (low_inventory_products / len(products)) * 100
+        if products
+        else 0
+    )
+    has_baseline = bool(comparison.get("has_baseline"))
+    new_orders = int(comparison.get("new_orders") or 0)
+    revenue_delta = float(comparison.get("revenue_delta") or 0)
+    inventory_delta = int(comparison.get("inventory_delta") or 0)
+    inventory_change_rate = float(comparison.get("inventory_change_rate") or 0)
+    average_change_rate = float(
+        comparison.get("new_order_average_change_rate") or 0
+    )
+    recent_sync_count = len(ctx.get("shopify_recent_syncs") or [])
+
+    if has_baseline:
+        movement_prefix = "+" if revenue_delta > 0 else ""
+        revenue_movement = (
+            f"{movement_prefix}{format_shopify_currency(revenue_delta, currency_code)}"
+        )
+        movement_desc = (
+            f"Revenue change since the previous synchronization. "
+            f"New-order average movement: {average_change_rate:+.1f}%. "
+            f"{recent_sync_count} snapshots available."
+        )
+        orders_value = f"+{new_orders}"
+        orders_desc = "New Shopify orders imported since the previous synchronization."
+        inventory_desc = (
+            f"{low_inventory_products} low-stock products. Inventory movement since "
+            f"the previous sync: {inventory_delta:+d} units ({inventory_change_rate:+.1f}%)."
+        )
+    else:
+        revenue_movement = "Baseline pending"
+        movement_desc = "Run another synchronization to activate historical anomaly detection."
+        orders_value = "Baseline pending"
+        orders_desc = "The first synchronized snapshot is establishing the comparison baseline."
+        inventory_desc = (
+            f"{low_inventory_products} low-stock products are currently monitored. "
+            "Historical movement activates after the next synchronization."
+        )
 
     section_header(
         "REVENUE RISK CENTER",
         "Revenue Risk Center",
-        "Operational signals from synchronized Shopify orders, products and inventory.",
+        "Measured operational signals from synchronized Shopify orders, products, inventory and snapshot history.",
     )
 
     risk_cards = [
         ("SHOPIFY SIGNAL", "Operational Risk", f"{operational_risk:.0f}/100", f"Risk score derived from revenue concentration and inventory exposure in {risk_category}.", operational_risk),
-        ("INVENTORY", "Stock Exposure", "Tracked", "Low-stock products are monitored during every Shopify synchronization.", 0),
-        ("MARGIN", "Margin Pressure", "Not tracked", "Connect cost and margin data to activate this indicator.", 0),
-        ("RETENTION", "Retention Stability", "Not tracked", "Customer retention history is required to activate this indicator.", 0),
+        ("INVENTORY", "Stock Exposure", f"{low_inventory_products} low-stock", inventory_desc, low_inventory_rate),
+        ("HISTORY", "Revenue Movement", revenue_movement, movement_desc, min(100, abs(average_change_rate))),
+        ("ORDERS", "Orders Since Prior Sync", orders_value, orders_desc, min(100, new_orders * 10)),
     ]
 
     cards_html = '<div class="revenue-risk-grid">'
@@ -1841,6 +1890,35 @@ def render_revenue_risk_center(ctx):
     cards_html += '</div>'
     st.markdown(cards_html, unsafe_allow_html=True)
 
+    open_alerts = [
+        alert
+        for alert in ctx.get("revenue_alerts", [])
+        if alert.get("status") == "open"
+    ]
+    st.markdown(
+        '<div style="margin:18px 0 8px; color:#93C5FD; font-size:10px; font-weight:950;">ACTIVE RISK SIGNALS</div>',
+        unsafe_allow_html=True,
+    )
+    if not open_alerts:
+        st.success("No open Shopify risk signals. Monitoring remains active after every synchronization.")
+    else:
+        alerts_html = '<div class="ai-decision-timeline">'
+        for alert in open_alerts[:4]:
+            severity = str(alert.get("severity") or "medium").upper()
+            title = html.escape(str(alert.get("title") or "Revenue signal detected"))
+            message = html.escape(str(alert.get("message") or ""))
+            alerts_html += (
+                '<div class="ai-decision-row">'
+                f'<div class="ai-decision-time"><span class="ai-pulse-dot"></span>{html.escape(severity)}</div>'
+                f'<div class="ai-decision-main"><b>{title}</b><br><span style="color:#CBD5E1;">{message}</span></div>'
+                '<div class="ai-decision-tag">OPEN</div>'
+                '</div>'
+            )
+        alerts_html += '</div>'
+        st.markdown(alerts_html, unsafe_allow_html=True)
+
+    st.caption("Margin and retention signals remain locked until cost and customer-history integrations are activated.")
+
 
 def render_ai_decision_feed(ctx):
     """Executive decision feed that makes the AI feel continuously active."""
@@ -1854,6 +1932,21 @@ def render_ai_decision_feed(ctx):
         momentum_message = f"Latest synchronized Shopify order value increased {float(growth_rate):.1f}%. {best} remains the leading revenue category."
     else:
         momentum_message = f"Latest synchronized Shopify order value decreased {abs(float(growth_rate)):.1f}%. {risk} remains under operational review."
+    live_alerts = [
+        alert
+        for alert in ctx.get("revenue_alerts", [])
+        if alert.get("status") == "open"
+    ]
+    if live_alerts:
+        top_alert = live_alerts[0]
+        risk_message = (
+            f"{html.escape(str(top_alert.get('title') or 'Revenue signal detected'))}: "
+            f"{html.escape(str(top_alert.get('message') or ''))}"
+        )
+        risk_tag = "REVIEW"
+    else:
+        risk_message = "No open Shopify risk signals. Monitoring remains active after each synchronization."
+        risk_tag = "CLEAR"
 
     section_header(
         "AI DECISION FEED",
@@ -1864,7 +1957,7 @@ def render_ai_decision_feed(ctx):
     rows = [
         ("NOW", momentum_message, "SHOPIFY SIGNAL"),
         ("SYNC", "Next-order forecast scenario refreshed from synchronized Shopify order values.", "FORECAST"),
-        ("2 MIN", f"Operational inefficiency watch remains active in {risk}.", "RISK"),
+        ("RISK", risk_message, risk_tag),
         ("LIVE", "Revenue protection layer synchronized with executive KPI engine.", "SYNCED"),
     ]
     rows_html = '<div class="ai-decision-timeline">'
@@ -2951,7 +3044,7 @@ if not st.session_state.get("saas_access_token"):
 name = current_user["name"]
 current_plan = get_plan(current_user.get("tenant_plan"))
 trial_days_left = get_trial_days_left(current_user)
-shopify_dashboard_status = {"status": "not_connected", "latest_sync": None}
+shopify_dashboard_status = {"status": "not_connected", "latest_sync": None, "recent_syncs": []}
 revenue_alerts = []
 try:
     dashboard_status_response = requests.get(
@@ -3176,6 +3269,7 @@ ctx = {
     "is_shopify_connected": is_shopify_connected,
     "has_uploaded_file": uploaded_file is not None,
     "revenue_alerts": revenue_alerts,
+    "shopify_recent_syncs": shopify_dashboard_status.get("recent_syncs") or [],
     "shopify_shop_domain": shopify_dashboard_status.get("shop_domain"),
     "shopify_live_risk_score": (
         float(shopify_live_snapshot.get("risk_score") or 0)

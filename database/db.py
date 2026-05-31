@@ -648,6 +648,25 @@ def get_latest_shopify_sync_snapshot(tenant_id: int):
             return cursor.fetchone()
 
 
+def get_recent_shopify_sync_snapshots(tenant_id: int, limit: int = 8):
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT id, tenant_id, shop_domain, currency_code, order_count,
+                       product_count, active_product_count, variant_count,
+                       location_count, inventory_units, revenue_total, average_order_value,
+                       growth_rate, forecast_revenue, risk_score, synced_at
+                FROM shopify_sync_snapshots
+                WHERE tenant_id = %s
+                ORDER BY synced_at DESC, id DESC
+                LIMIT %s;
+                """,
+                (tenant_id, limit)
+            )
+            return cursor.fetchall()
+
+
 def save_revenue_alerts(tenant_id: int, snapshot_id: int, alerts: list[dict]):
     saved_alerts = []
     active_keys = [alert["alert_key"] for alert in alerts]

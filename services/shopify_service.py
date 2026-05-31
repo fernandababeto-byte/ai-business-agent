@@ -14,6 +14,7 @@ from database.db import (
     get_shopify_connection,
     get_shopify_connection_with_token,
     get_latest_shopify_sync_snapshot,
+    get_recent_shopify_sync_snapshots,
     save_shopify_connection,
     save_shopify_oauth_state,
     save_revenue_alerts,
@@ -146,10 +147,15 @@ def get_connection_status(tenant_id: int):
             "last_sync_at": None,
             "scopes": None,
             "latest_sync": None,
+            "recent_syncs": [],
         }
     status = dict(connection)
     latest_sync = get_latest_shopify_sync_snapshot(tenant_id)
     status["latest_sync"] = dict(latest_sync) if latest_sync else None
+    status["recent_syncs"] = [
+        dict(snapshot)
+        for snapshot in get_recent_shopify_sync_snapshots(tenant_id)
+    ]
     return status
 
 
@@ -189,6 +195,56 @@ def _collect_connection_nodes(tenant_id: int, query: str, root_key: str) -> list
         if not page_info["hasNextPage"]:
             return nodes
         cursor = page_info["endCursor"]
+
+
+def _calculate_sync_comparison(previous_snapshot: dict | None, summary: dict) -> dict:
+    if not previous_snapshot:
+        return {
+            "has_baseline": False,
+            "new_orders": 0,
+            "revenue_delta": Decimal("0"),
+            "inventory_delta": 0,
+            "inventory_change_rate": None,
+            "new_order_average": None,
+            "new_order_average_change_rate": None,
+        }
+
+    previous_revenue = Decimal(previous_snapshot.get("revenue_total") or 0)
+    previous_inventory = int(previous_snapshot.get("inventory_units") or 0)
+    previous_order_count = int(previous_snapshot.get("order_count") or 0)
+    previous_average_order_value = Decimal(previous_snapshot.get("average_order_value") or 0)
+    revenue_delta = summary["revenue_total"] - previous_revenue
+    inventory_delta = summary["inventory_units"] - previous_inventory
+    new_orders = max(0, summary["order_count"] - previous_order_count)
+    inventory_change_rate = None
+    if previous_inventory:
+        inventory_change_rate = (Decimal(inventory_delta) / Decimal(previous_inventory)) * 100
+    new_order_average = None
+    new_order_average_change_rate = None
+    if new_orders and revenue_delta >= 0:
+        new_order_average = revenue_delta / Decimal(new_orders)
+        if previous_average_order_value:
+            new_order_average_change_rate = (
+                (new_order_average - previous_average_order_value)
+                / previous_average_order_value
+            ) * 100
+
+    return {
+        "has_baseline": True,
+        "new_orders": new_orders,
+        "revenue_delta": revenue_delta,
+        "inventory_delta": inventory_delta,
+        "inventory_change_rate": inventory_change_rate,
+        "new_order_average": new_order_average,
+        "new_order_average_change_rate": new_order_average_change_rate,
+    }
+
+
+def _serialize_sync_comparison(comparison: dict) -> dict:
+    return {
+        key: str(value) if isinstance(value, Decimal) else value
+        for key, value in comparison.items()
+    }
 
 
 def sync_shopify_store(tenant_id: int):
@@ -316,12 +372,16 @@ def sync_shopify_store(tenant_id: int):
         "forecast_revenue": forecast_revenue,
         "risk_score": risk_score,
     }
+    previous_snapshot = get_latest_shopify_sync_snapshot(tenant_id)
+    comparison = _calculate_sync_comparison(previous_snapshot, summary)
+    serialized_comparison = _serialize_sync_comparison(comparison)
     payload = {
         "shop": shop,
         "orders": orders,
         "products": products,
         "locations": locations,
         "category_revenue": category_revenue_rows,
+        "sync_comparison": serialized_comparison,
     }
     snapshot = save_shopify_sync_snapshot(
         tenant_id=tenant_id,
@@ -400,7 +460,63 @@ def sync_shopify_store(tenant_id: int):
                 "metric_value": growth_rate,
             }
         )
+    if comparison["has_baseline"] and comparison["revenue_delta"] < 0:
+        alerts.append(
+            {
+                "alert_key": "revenue-total-anomaly",
+                "alert_type": "revenue_anomaly",
+                "severity": "high",
+                "title": "Revenue anomaly detected",
+                "message": (
+                    f"Synchronized Shopify revenue decreased "
+                    f"{abs(comparison['revenue_delta']):.2f} {shop['currencyCode']} "
+                    "since the previous sync. Review refunds, cancellations or order changes."
+                ),
+                "metric_value": comparison["revenue_delta"],
+            }
+        )
+    new_order_average_change_rate = comparison["new_order_average_change_rate"]
+    if (
+        comparison["has_baseline"]
+        and new_order_average_change_rate is not None
+        and new_order_average_change_rate <= Decimal("-25")
+    ):
+        alerts.append(
+            {
+                "alert_key": "average-order-value-anomaly",
+                "alert_type": "revenue_anomaly",
+                "severity": "high" if new_order_average_change_rate <= Decimal("-40") else "medium",
+                "title": "Average order value anomaly detected",
+                "message": (
+                    f"New Shopify orders average {comparison['new_order_average']:.2f} "
+                    f"{shop['currencyCode']}, {abs(new_order_average_change_rate):.1f}% "
+                    "below the previous synchronized average."
+                ),
+                "metric_value": new_order_average_change_rate,
+            }
+        )
+    inventory_change_rate = comparison["inventory_change_rate"]
+    if (
+        comparison["has_baseline"]
+        and comparison["inventory_delta"] <= -5
+        and inventory_change_rate is not None
+        and inventory_change_rate <= Decimal("-20")
+    ):
+        alerts.append(
+            {
+                "alert_key": "inventory-movement-anomaly",
+                "alert_type": "inventory_anomaly",
+                "severity": "high" if inventory_change_rate <= Decimal("-35") else "medium",
+                "title": "Inventory movement requires review",
+                "message": (
+                    f"Shopify inventory decreased by {abs(comparison['inventory_delta'])} units "
+                    f"({abs(inventory_change_rate):.1f}%) since the previous sync."
+                ),
+                "metric_value": inventory_change_rate,
+            }
+        )
     saved_alerts = save_revenue_alerts(tenant_id, snapshot["id"], alerts)
     dispatch_alert_notifications(tenant_id, saved_alerts)
     snapshot["active_alert_count"] = len(saved_alerts)
+    snapshot["comparison"] = serialized_comparison
     return dict(snapshot)
