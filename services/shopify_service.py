@@ -214,6 +214,14 @@ def sync_shopify_store(tenant_id: int):
           createdAt
           displayFinancialStatus
           currentTotalPriceSet { shopMoney { amount currencyCode } }
+          lineItems(first: 100) {
+            nodes {
+              title
+              quantity
+              discountedTotalSet { shopMoney { amount currencyCode } }
+              product { productType }
+            }
+          }
         }
         pageInfo { hasNextPage endCursor }
       }
@@ -226,6 +234,7 @@ def sync_shopify_store(tenant_id: int):
           id
           title
           status
+          productType
           totalInventory
           variants(first: 100) {
             nodes { id title inventoryQuantity }
@@ -258,6 +267,21 @@ def sync_shopify_store(tenant_id: int):
         for order in orders
     ]
     average_order_value = revenue_total / len(order_values) if order_values else Decimal("0")
+    category_revenue = {}
+    for order in orders:
+        for line_item in order.get("lineItems", {}).get("nodes", []):
+            product = line_item.get("product") or {}
+            category = (product.get("productType") or "").strip() or "Uncategorized"
+            amount = Decimal(line_item["discountedTotalSet"]["shopMoney"]["amount"])
+            category_revenue[category] = category_revenue.get(category, Decimal("0")) + amount
+    category_revenue_rows = [
+        {"category": category, "revenue": str(amount)}
+        for category, amount in sorted(
+            category_revenue.items(),
+            key=lambda item: item[1],
+            reverse=True,
+        )
+    ]
     growth_rate = None
     if len(order_values) >= 2 and order_values[1] != 0:
         growth_rate = ((order_values[0] - order_values[1]) / order_values[1]) * 100
@@ -297,6 +321,7 @@ def sync_shopify_store(tenant_id: int):
         "orders": orders,
         "products": products,
         "locations": locations,
+        "category_revenue": category_revenue_rows,
     }
     snapshot = save_shopify_sync_snapshot(
         tenant_id=tenant_id,

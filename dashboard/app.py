@@ -1511,6 +1511,33 @@ def prepare_business_dataframe(dataframe):
     return prepared_df, text_column, numeric_column
 
 
+def build_shopify_category_dataframe(snapshot):
+    if not snapshot:
+        return pd.DataFrame(columns=["setor", "vendas"])
+
+    payload = snapshot.get("payload") or {}
+    category_rows = payload.get("category_revenue") or []
+    prepared_rows = []
+    for row in category_rows:
+        category = str(row.get("category") or "").strip() or "Uncategorized"
+        try:
+            revenue = float(row.get("revenue") or 0)
+        except (TypeError, ValueError):
+            continue
+        if revenue > 0:
+            prepared_rows.append({"setor": category, "vendas": revenue})
+
+    if prepared_rows:
+        return pd.DataFrame(prepared_rows)
+
+    revenue_total = float(snapshot.get("revenue_total") or 0)
+    if revenue_total > 0:
+        return pd.DataFrame(
+            [{"setor": "Shopify sales awaiting category sync", "vendas": revenue_total}]
+        )
+    return pd.DataFrame(columns=["setor", "vendas"])
+
+
 def premium_dataframe(dataframe, height=290, key=None):
     styled_dataframe = (
         dataframe.style
@@ -2600,6 +2627,20 @@ def render_ai_copilot(ctx):
 
 
 def render_data_center(ctx):
+    if ctx.get("shopify_live_snapshot"):
+        section_header(
+            "SHOPIFY DATA AUDIT",
+            "Live Shopify Import",
+            "Revenue categories derived from synchronized Shopify order line items.",
+        )
+        st.markdown("### Shopify category revenue")
+        premium_dataframe(ctx["shopify_category_df"], height=300, key="shopify_category_revenue")
+        st.info(
+            "Shopify is the active operating source. CSV and XLSX uploads remain available "
+            "in the left sidebar for isolated file analysis."
+        )
+        return
+
     section_header(
         "DATA CENTER",
         "Raw Data & Upload Preview",
@@ -3075,6 +3116,11 @@ if filtered_df is None or filtered_df.empty:
     st.error("The file must contain one text column and one numeric column.")
     st.stop()
 
+shopify_live_snapshot = shopify_dashboard_status.get("latest_sync")
+shopify_category_df = build_shopify_category_dataframe(shopify_live_snapshot)
+if uploaded_file is None and not shopify_category_df.empty:
+    filtered_df = shopify_category_df.copy()
+
 st.sidebar.markdown("## Operating Areas")
 selected_page = st.sidebar.selectbox(
     "Area",
@@ -3147,7 +3193,6 @@ shopify_max_revenue = filtered_df["vendas"].max()
 shopify_min_revenue = filtered_df["vendas"].min()
 shopify_best_category = filtered_df.loc[filtered_df["vendas"].idxmax(), "setor"]
 shopify_risk_category = filtered_df.loc[filtered_df["vendas"].idxmin(), "setor"]
-shopify_live_snapshot = shopify_dashboard_status.get("latest_sync")
 if shopify_live_snapshot:
     shopify_total_revenue = float(shopify_live_snapshot.get("revenue_total") or 0)
     synced_order_count = int(shopify_live_snapshot.get("order_count") or 0)
@@ -3176,6 +3221,7 @@ else:
 ctx = {
     "original_df": original_df,
     "filtered_df": filtered_df,
+    "shopify_category_df": shopify_category_df,
     "total_sales": total_sales,
     "average_sales": average_sales,
     "best_sector": best_sector,

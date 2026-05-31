@@ -637,7 +637,7 @@ def get_latest_shopify_sync_snapshot(tenant_id: int):
                 SELECT id, tenant_id, shop_domain, currency_code, order_count,
                        product_count, active_product_count, variant_count,
                        location_count, inventory_units, revenue_total, average_order_value,
-                       growth_rate, forecast_revenue, risk_score, synced_at
+                       growth_rate, forecast_revenue, risk_score, payload, synced_at
                 FROM shopify_sync_snapshots
                 WHERE tenant_id = %s
                 ORDER BY synced_at DESC, id DESC
