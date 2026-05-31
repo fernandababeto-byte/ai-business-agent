@@ -31,6 +31,8 @@ class SalesAgent:
         - oportunidades;
         - estratégias;
         - recomendações de crescimento.
+
+        Use somente os dados fornecidos. Nao invente metricas, percentuais ou categorias.
         """
 
         response = self.client.chat.completions.create(

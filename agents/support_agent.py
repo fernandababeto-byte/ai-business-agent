@@ -85,6 +85,8 @@ class SupportAgent:
 
         Pergunta:
         {question}
+
+        Use somente os dados fornecidos. Nao invente metricas, percentuais ou categorias.
         """
 
         response = self.client.chat.completions.create(

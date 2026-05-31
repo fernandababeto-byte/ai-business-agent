@@ -12,15 +12,6 @@ class FinanceAgent:
 
         total_sales = dataframe["vendas"].sum()
 
-        estimated_cost = total_sales * 0.65
-
-        estimated_profit = total_sales - estimated_cost
-
-        if total_sales > 0:
-            profit_margin = (estimated_profit / total_sales) * 100
-        else:
-            profit_margin = 0
-
         prompt = f"""
         Você é um diretor financeiro empresarial.
 
@@ -28,11 +19,11 @@ class FinanceAgent:
 
         Receita total: {total_sales}
 
-        Custo estimado: {estimated_cost}
+        Custos, lucro e margem: indisponiveis. Estes dados ainda nao foram
+        sincronizados pela integracao Shopify.
 
-        Lucro estimado: {estimated_profit}
-
-        Margem estimada: {profit_margin:.2f}%
+        Nao invente custos, lucro, margem, ROAS, CAC, LTV ou churn.
+        Explique claramente quando uma metrica depende de uma nova fonte de dados.
 
         Gere:
 

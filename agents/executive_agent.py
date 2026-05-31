@@ -70,6 +70,7 @@ Liste insights estratégicos claros e completos.
 Crie recomendações práticas e detalhadas.
 
 Use português profissional.
+Use somente os dados fornecidos. Nao invente metricas, percentuais ou categorias.
 """
 
         response = self.client.chat.completions.create(

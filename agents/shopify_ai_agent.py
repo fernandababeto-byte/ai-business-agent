@@ -44,6 +44,7 @@ class ShopifyAIAgent:
 
             {dataframe.to_string(index=False)}
 
+            Use somente os dados fornecidos. Nao invente metricas, percentuais ou categorias.
             Responda em portugues profissional.
             """
 

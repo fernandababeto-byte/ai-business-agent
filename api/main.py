@@ -1,6 +1,5 @@
 import json
 import os
-from pathlib import Path
 
 import pandas as pd
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -41,9 +40,6 @@ from services.shopify_sync_scheduler import (
     start_shopify_sync_scheduler,
 )
 
-
-BASE_DIR = Path(__file__).resolve().parent.parent
-DATA_PATH = BASE_DIR / "data" / "vendas.csv"
 
 app = FastAPI(
     title="API de Agente de Negócios de IA",
@@ -107,31 +103,45 @@ def require_owner(current_user: dict = Depends(get_current_user)):
     return current_user
 
 
-def load_default_dataframe():
-    if DATA_PATH.exists():
-        df = pd.read_csv(DATA_PATH)
-    else:
-        df = pd.DataFrame(
+def build_shopify_category_dataframe(snapshot):
+    if not snapshot:
+        return pd.DataFrame(columns=["setor", "vendas"])
+
+    payload = snapshot.get("payload") or {}
+    category_rows = payload.get("category_revenue") or []
+    prepared_rows = []
+    for row in category_rows:
+        category = str(row.get("category") or "").strip() or "Uncategorized"
+        try:
+            revenue = float(row.get("revenue") or 0)
+        except (TypeError, ValueError):
+            continue
+        if revenue > 0:
+            prepared_rows.append({"setor": category, "vendas": revenue})
+
+    if prepared_rows:
+        return pd.DataFrame(prepared_rows)
+
+    return pd.DataFrame(
+        [
             {
-                "setor": ["Têxtil", "Logística", "Varejo", "Tecnologia", "Industrial"],
-                "vendas": [120000, 95000, 143000, 210000, 175000],
+                "setor": "No Shopify sales synced yet",
+                "vendas": float(snapshot.get("revenue_total") or 0),
             }
-        )
+        ]
+    )
 
-    df.columns = [str(col).strip().lower() for col in df.columns]
-    required_columns = {"setor", "vendas"}
-    missing_columns = required_columns - set(df.columns)
-    if missing_columns:
-        missing = ", ".join(sorted(missing_columns))
-        raise ValueError(f"Arquivo de dados sem colunas obrigatorias: {missing}")
 
-    df["vendas"] = pd.to_numeric(df["vendas"], errors="coerce")
-    df = df.dropna(subset=["setor", "vendas"])
+def load_tenant_dataframe(tenant_id):
+    status = get_connection_status(tenant_id)
+    if status.get("status") != "connected":
+        raise ValueError("Connect Shopify before requesting operational analysis.")
 
-    if df.empty:
-        raise ValueError("Arquivo de dados nao possui linhas validas para analise.")
+    snapshot = status.get("latest_sync")
+    if not snapshot:
+        raise ValueError("Run the initial Shopify sync before requesting operational analysis.")
 
-    return df
+    return build_shopify_category_dataframe(snapshot)
 
 
 @app.on_event("startup")
@@ -385,7 +395,7 @@ def process_question(question: str, current_user: dict):
         )
 
     try:
-        dataframe = load_default_dataframe()
+        dataframe = load_tenant_dataframe(current_user["tenant_id"])
 
         response = router.route_question(
             question=question,

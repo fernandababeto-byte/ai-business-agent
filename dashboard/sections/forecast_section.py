@@ -27,9 +27,8 @@ def render_forecast_section(
     forecast_values = []
     base_value = float(average_revenue) if average_revenue else 0
 
-    for month_index in range(1, 7):
-        projected_growth = base_value * (1 + (0.08 * month_index))
-        forecast_values.append(projected_growth)
+    for _month_index in range(1, 7):
+        forecast_values.append(base_value)
 
     forecast_df = pd.DataFrame(
         {
@@ -134,13 +133,12 @@ def render_forecast_section(
     render_html(
         f'<div class="ai-response-box">'
         f'<b>Análise Preditiva Shopify:</b><br><br>'
-        f'• Tendência geral de crescimento positivo para os próximos ciclos.<br><br>'
-        f'• A categoria <b>{best_category}</b> apresenta o maior potencial de escala comercial.<br><br>'
-        f'• A categoria <b>{risk_category}</b> deve ser revisada para evitar perda de performance.<br><br>'
-        f'• A receita potencial projetada é de '
+        f'• A linha de base permanece estável até que novos pedidos sincronizados permitam medir a variação.<br><br>'
+        f'• A categoria <b>{best_category}</b> lidera a receita categorizada sincronizada.<br><br>'
+        f'• A categoria <b>{risk_category}</b> deve permanecer sob revisão operacional.<br><br>'
+        f'• A linha de base atual é de '
         f'<b>{format_currency(forecast_values[-1] if forecast_values else 0)}</b>.<br><br>'
-        f'• A recomendação estratégica é aumentar investimento nas categorias com maior resposta de receita '
-        f'e revisar categorias com desempenho inferior.'
+        f'• Conecte mais histórico de pedidos antes de tomar decisões de escala.'
         f'</div>'
     )
 

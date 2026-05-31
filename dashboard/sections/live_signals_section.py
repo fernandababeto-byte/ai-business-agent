@@ -28,11 +28,6 @@ def render_live_signals_section(
         unsafe_allow_html=True,
     )
 
-    try:
-        confidence_growth = min(98, max(82, 80 + int(float(growth_rate) / 3)))
-    except Exception:
-        confidence_growth = 88
-
     revenue_text = _format_currency_short(total_revenue)
 
     signals = [
@@ -43,7 +38,7 @@ def render_live_signals_section(
                 f"{best_category} apresentou aceleração de receita acima da média operacional "
                 "e deve ser monitorada como prioridade de escala."
             ),
-            "confidence": f"{confidence_growth}%",
+            "confidence": "SHOPIFY DATA",
             "time": "Updated now",
             "tag": "IA DETECTADA",
             "glow": "signal-glow-blue",
@@ -55,7 +50,7 @@ def render_live_signals_section(
                 f"{risk_category} apresentou sinal de atenção operacional e pode impactar "
                 "a performance futura se não for acompanhado."
             ),
-            "confidence": "88%",
+            "confidence": "REVIEW REQUIRED",
             "time": "Updated 2 minutes ago",
             "tag": "RISCO AUTÔNOMO",
             "glow": "signal-glow-orange",
@@ -67,7 +62,7 @@ def render_live_signals_section(
                 f"Receita consolidada de {revenue_text} indica volume adequado para "
                 "automações avançadas e expansão comercial progressiva."
             ),
-            "confidence": "92%",
+            "confidence": "SHOPIFY DATA",
             "time": "Updated now",
             "tag": "SCALING AI",
             "glow": "signal-glow-green",
@@ -84,7 +79,7 @@ def render_live_signals_section(
             f'<div class="live-signal-title">{signal["title"]}</div>'
             f'<div class="live-signal-description">{signal["description"]}</div>'
             '<div class="live-signal-footer">'
-            f'<div class="live-signal-confidence">AI Confidence: {signal["confidence"]}</div>'
+            f'<div class="live-signal-confidence">{signal["confidence"]}</div>'
             f'<div class="live-signal-time">{signal["time"]}</div>'
             '</div>'
             '</div>'
