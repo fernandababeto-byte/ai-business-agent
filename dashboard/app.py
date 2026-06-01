@@ -1226,6 +1226,117 @@ def render_plan_card(plan_item, accent, is_current=False):
     )
 
 
+def render_billing_center(billing_status, access_token):
+    status = str(billing_status.get("status") or "trialing")
+    trial_days_left = int(billing_status.get("trial_days_left") or 0)
+    plan_key = str(billing_status.get("plan_key") or "revenue_intelligence")
+    plan = get_plan(plan_key)
+    checkout_configured = bool(billing_status.get("checkout_configured"))
+
+    if status == "active":
+        badge = "SUBSCRIPTION ACTIVE"
+        title = "Revenue monitoring is protected"
+        description = "Your Shopify Revenue Operating System subscription is active."
+        accent = "#34D399"
+    elif status == "expired":
+        badge = "TRIAL ENDED"
+        title = "Choose a plan to restore monitoring"
+        description = "Revenue analysis and automatic Shopify synchronization are paused until a subscription is activated."
+        accent = "#F59E0B"
+    else:
+        badge = "14-DAY TRIAL - NO CARD"
+        title = f"{trial_days_left} trial days remaining"
+        description = "Keep the operating history active after the trial by selecting the plan that matches your Shopify operation."
+        accent = "#60A5FA"
+
+    st.markdown(
+        (
+            f'<div class="ai-card" style="border-color:{accent}55;">'
+            f'<div class="ai-badge">{html.escape(badge)}</div>'
+            f'<div class="ai-title">{html.escape(title)}</div>'
+            f'<div class="ai-subtitle">{html.escape(description)}</div>'
+            f'<div style="margin-top:14px; color:#E2E8F0; font-size:13px; font-weight:800;">'
+            f'Current plan: {html.escape(plan["name"])} - US${plan["price"]}/mo'
+            '</div>'
+            '</div>'
+        ),
+        unsafe_allow_html=True,
+    )
+
+    section_header(
+        "SUBSCRIPTION PLANS",
+        "Choose Your Revenue Protection Level",
+        "Start with the operational coverage your store needs. Upgrade as your Shopify operation grows.",
+    )
+    plan_cols = st.columns(3, gap="small")
+    plan_accents = ["green", "blue", "amber"]
+    for col, (candidate_key, candidate_plan), candidate_accent in zip(
+        plan_cols,
+        PLAN_CATALOG.items(),
+        plan_accents,
+    ):
+        with col:
+            is_current = candidate_key == plan_key
+            render_plan_card(candidate_plan, accent=candidate_accent, is_current=is_current)
+            if st.button(
+                "Select plan" if not is_current else "Continue with this plan",
+                key=f"billing_checkout_{candidate_key}",
+                use_container_width=True,
+            ):
+                if not checkout_configured:
+                    st.info("Paddle checkout is ready for configuration. Add the Paddle keys and plan prices in Render before accepting real subscriptions.")
+                else:
+                    try:
+                        response = requests.post(
+                            f"{API_BASE_URL}/billing/checkout",
+                            headers={"Authorization": f"Bearer {access_token}"},
+                            json={"plan_key": candidate_key},
+                            timeout=12,
+                        )
+                        if not response.ok:
+                            raise ValueError(response.json().get("detail", response.text))
+                        st.link_button(
+                            "Open secure Paddle checkout",
+                            response.json()["checkout_url"],
+                            use_container_width=True,
+                        )
+                    except Exception as error:
+                        st.error(f"Checkout is not available: {error}")
+
+    if not checkout_configured:
+        st.caption("Paddle is not enabled yet. The pricing experience is visible, but no customer can be charged until the Merchant of Record account and plan prices are configured.")
+
+    try:
+        tenants_response = requests.get(
+            f"{API_BASE_URL}/tenants/commercial",
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=8,
+        )
+        if tenants_response.ok:
+            tenants = tenants_response.json().get("tenants", [])
+            if tenants:
+                vertical_spacer()
+                section_header(
+                    "ADMIN OVERVIEW",
+                    "Client Subscription Status",
+                    "Operational view of active subscriptions and trials across SaaS clients.",
+                )
+                st.dataframe(tenants, use_container_width=True, hide_index=True)
+    except Exception:
+        pass
+
+
+def is_platform_admin(user):
+    platform_admin_email = os.getenv(
+        "PLATFORM_ADMIN_EMAIL",
+        os.getenv("BOOTSTRAP_ADMIN_EMAIL", ""),
+    ).strip().lower()
+    return bool(
+        platform_admin_email
+        and str(user.get("email") or "").strip().lower() == platform_admin_email
+    )
+
+
 def render_static_bar_chart(dataframe):
     chart_df = (
         dataframe.groupby("setor", as_index=False)["vendas"]
@@ -3044,8 +3155,32 @@ if not st.session_state.get("saas_access_token"):
 name = current_user["name"]
 current_plan = get_plan(current_user.get("tenant_plan"))
 trial_days_left = get_trial_days_left(current_user)
+billing_status = {
+    "status": "trialing",
+    "has_access": True,
+    "trial_days_left": trial_days_left,
+    "plan_key": current_user.get("tenant_plan") or "revenue_intelligence",
+    "checkout_configured": False,
+}
 shopify_dashboard_status = {"status": "not_connected", "latest_sync": None, "recent_syncs": []}
 revenue_alerts = []
+try:
+    billing_status_response = requests.get(
+        f"{API_BASE_URL}/billing/status",
+        headers={"Authorization": f"Bearer {st.session_state.saas_access_token}"},
+        timeout=8,
+    )
+    if billing_status_response.ok:
+        billing_status = billing_status_response.json()
+except Exception:
+    pass
+current_plan = get_plan(billing_status.get("plan_key"))
+
+checkout_result = st.query_params.get("billing")
+if checkout_result == "success":
+    st.success("Subscription checkout completed. Paddle is confirming the account status.")
+elif checkout_result == "canceled":
+    st.info("Checkout canceled. Your current access status has not changed.")
 try:
     dashboard_status_response = requests.get(
         f"{API_BASE_URL}/shopify/status",
@@ -3075,9 +3210,14 @@ if st.sidebar.button("Sign out", key="saas_logout"):
 st.sidebar.success(f"Welcome, {name}")
 st.sidebar.caption(f"Company: {current_user['tenant_name']}")
 st.sidebar.caption(f"Plan: {current_plan['name']} - US${current_plan['price']}/mo")
-st.sidebar.caption(f"Trial: {trial_days_left} days left, no card")
+if billing_status.get("status") == "active":
+    st.sidebar.caption("Subscription: active")
+elif billing_status.get("status") == "expired":
+    st.sidebar.caption("Trial: expired - choose a plan")
+else:
+    st.sidebar.caption(f"Trial: {billing_status.get('trial_days_left', trial_days_left)} days left, no card")
 
-if current_user["role"] in {"owner", "admin"}:
+if is_platform_admin(current_user):
     with st.sidebar.expander("New SaaS Client", expanded=False):
         with st.form("new_tenant_form"):
             new_tenant_name = st.text_input("Company")
@@ -3155,15 +3295,19 @@ if is_shopify_connected:
     filtered_df = shopify_category_df.copy()
 
 st.sidebar.markdown("## Operating Areas")
+operating_areas = [
+    "Revenue Command Center",
+    "Risk Center",
+    "Forecast",
+    "AI Revenue Advisor",
+    "Data & Setup",
+    "Billing & Trial",
+]
+if not billing_status.get("has_access", True):
+    operating_areas = ["Billing & Trial"]
 selected_page = st.sidebar.selectbox(
     "Area",
-    options=[
-        "Revenue Command Center",
-        "Risk Center",
-        "Forecast",
-        "AI Revenue Advisor",
-        "Data & Setup",
-    ],
+    options=operating_areas,
     index=0,
     key="sidebar_operating_area_v3",
 )
@@ -3285,7 +3429,9 @@ if st.session_state.last_selected_page_v3 != selected_page:
     st.session_state.last_selected_page_v3 = selected_page
     st.session_state.pop("copilot_question_prefill", None)
 
-if selected_page != "Data & Setup" and not shopify_live_snapshot:
+if selected_page == "Billing & Trial":
+    render_billing_center(billing_status, st.session_state.saas_access_token)
+elif selected_page != "Data & Setup" and not shopify_live_snapshot:
     section_header(
         "SHOPIFY DATA REQUIRED",
         "Connect and sync Shopify to activate this area",

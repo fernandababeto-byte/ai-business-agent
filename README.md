@@ -244,13 +244,45 @@ POSTGRES_PASSWORD=uma_senha_forte
 JWT_SECRET_KEY=um_segredo_forte
 BOOTSTRAP_ADMIN_EMAIL=admin@suaempresa.com
 BOOTSTRAP_ADMIN_PASSWORD=uma_senha_forte
+PLATFORM_ADMIN_EMAIL=admin@suaempresa.com
 ```
 
 ## SaaS Multi-Cliente
 
 O primeiro cliente e o primeiro administrador sao criados automaticamente a partir das variaveis `BOOTSTRAP_TENANT_*` e `BOOTSTRAP_ADMIN_*`.
 
-Depois do primeiro login, usuarios com papel `owner` ou `admin` podem cadastrar novos clientes SaaS pelo dashboard.
+Depois do primeiro login, apenas o email configurado em `PLATFORM_ADMIN_EMAIL` pode cadastrar novos clientes SaaS e visualizar o resumo comercial global pelo dashboard. Cada cliente acessa somente a propria empresa.
+
+## Trial e cobranca internacional com Paddle
+
+Cada novo cliente recebe 14 dias gratis, sem cartao. Quando o trial termina, analises premium e sincronizacoes automaticas ficam pausadas ate a ativacao de uma assinatura.
+
+Para habilitar cobrancas reais, use a Paddle como Merchant of Record. Crie os tres precos mensais recorrentes na Paddle e configure:
+
+```env
+PADDLE_ENVIRONMENT=sandbox
+PADDLE_API_KEY=pdl_sdbx_apikey_...
+PADDLE_WEBHOOK_SECRET=pdl_ntfset_...
+PADDLE_PRICE_REVENUE_INTELLIGENCE=pri_...
+PADDLE_PRICE_GROWTH_INTELLIGENCE=pri_...
+PADDLE_PRICE_REVENUE_OS=pri_...
+```
+
+Na Paddle, configure um webhook:
+
+```text
+https://seu-dominio-api.com/billing/webhook
+```
+
+Eventos necessarios:
+
+```text
+subscription.created
+subscription.updated
+subscription.canceled
+```
+
+Antes do checkout real, configure tambem o `Default payment link` nas configuracoes de checkout da Paddle. Use `PADDLE_ENVIRONMENT=production` somente depois da aprovacao da conta e dos testes no sandbox.
 
 ## Shopify OAuth
 

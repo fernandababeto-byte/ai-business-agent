@@ -27,6 +27,12 @@ from services.auth_service import (
     get_current_user_from_token,
     hash_password,
 )
+from services.billing_service import (
+    create_checkout_session,
+    get_billing_status,
+    list_tenant_commercial_statuses,
+    process_paddle_webhook,
+)
 from services.plan_catalog import PLAN_CATALOG, get_plan
 from services.shopify_service import (
     build_install_url,
@@ -83,6 +89,10 @@ class NotificationPreferencesUpdate(BaseModel):
     minimum_severity: str = "high"
 
 
+class BillingCheckoutRequest(BaseModel):
+    plan_key: str = Field(min_length=3)
+
+
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
 ):
@@ -100,6 +110,29 @@ def get_current_user(
 def require_owner(current_user: dict = Depends(get_current_user)):
     if current_user["role"] not in {"owner", "admin"}:
         raise HTTPException(status_code=403, detail="Permissao insuficiente.")
+    return current_user
+
+
+def require_platform_admin(current_user: dict = Depends(require_owner)):
+    platform_admin_email = os.getenv(
+        "PLATFORM_ADMIN_EMAIL",
+        os.getenv("BOOTSTRAP_ADMIN_EMAIL", ""),
+    ).strip().lower()
+    if not platform_admin_email or current_user["email"].strip().lower() != platform_admin_email:
+        raise HTTPException(
+            status_code=403,
+            detail="Platform administrator permission required.",
+        )
+    return current_user
+
+
+def require_commercial_access(current_user: dict = Depends(get_current_user)):
+    billing_status = get_billing_status(current_user["tenant_id"])
+    if not billing_status["has_access"]:
+        raise HTTPException(
+            status_code=402,
+            detail="Trial expired. Choose a subscription plan to continue.",
+        )
     return current_user
 
 
@@ -207,10 +240,47 @@ def plans():
     }
 
 
+@app.get("/billing/status")
+def billing_status(current_user: dict = Depends(get_current_user)):
+    return get_billing_status(current_user["tenant_id"])
+
+
+@app.post("/billing/checkout")
+def billing_checkout(
+    data: BillingCheckoutRequest,
+    current_user: dict = Depends(require_owner),
+):
+    try:
+        checkout_url = create_checkout_session(
+            tenant_id=current_user["tenant_id"],
+            email=current_user["email"],
+            plan_key=data.plan_key,
+        )
+    except Exception as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+    return {"checkout_url": checkout_url}
+
+
+@app.post("/billing/webhook")
+async def billing_webhook(request: Request):
+    payload = await request.body()
+    signature = request.headers.get("paddle-signature", "")
+    try:
+        return process_paddle_webhook(payload, signature)
+    except Exception as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@app.get("/tenants/commercial")
+def tenant_commercial_summary(current_user: dict = Depends(require_platform_admin)):
+    return {"tenants": list_tenant_commercial_statuses()}
+
+
 @app.post("/tenants")
 def create_tenant_user(
     data: TenantUserCreate,
-    current_user: dict = Depends(require_owner),
+    current_user: dict = Depends(require_platform_admin),
 ):
     tenant = create_tenant(data.tenant_name, data.tenant_slug)
     user = create_user(
@@ -303,7 +373,9 @@ def shopify_test(current_user: dict = Depends(require_owner)):
 
 
 @app.post("/shopify/sync")
-def shopify_sync(current_user: dict = Depends(require_owner)):
+def shopify_sync(current_user: dict = Depends(require_commercial_access)):
+    if current_user["role"] not in {"owner", "admin"}:
+        raise HTTPException(status_code=403, detail="Permissao insuficiente.")
     try:
         return sync_shopify_store(current_user["tenant_id"])
     except Exception as error:
@@ -440,12 +512,12 @@ def process_question(question: str, current_user: dict):
 
 
 @app.post("/consultar")
-def consultar(data: BusinessQuestion, current_user: dict = Depends(get_current_user)):
+def consultar(data: BusinessQuestion, current_user: dict = Depends(require_commercial_access)):
     return process_question(data.question, current_user)
 
 
 @app.post("/consult")
-def consult(data: BusinessQuestion, current_user: dict = Depends(get_current_user)):
+def consult(data: BusinessQuestion, current_user: dict = Depends(require_commercial_access)):
     return process_question(data.question, current_user)
 
 

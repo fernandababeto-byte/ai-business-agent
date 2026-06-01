@@ -35,6 +35,8 @@ services:
         sync: false
       - key: BOOTSTRAP_ADMIN_EMAIL
         sync: false
+      - key: PLATFORM_ADMIN_EMAIL
+        sync: false
       - key: BOOTSTRAP_ADMIN_PASSWORD
         sync: false
       - key: SHOPIFY_CLIENT_ID
@@ -63,6 +65,18 @@ services:
         sync: false
       - key: TWILIO_WHATSAPP_FROM
         sync: false
+      - key: PADDLE_ENVIRONMENT
+        value: sandbox
+      - key: PADDLE_API_KEY
+        sync: false
+      - key: PADDLE_WEBHOOK_SECRET
+        sync: false
+      - key: PADDLE_PRICE_REVENUE_INTELLIGENCE
+        sync: false
+      - key: PADDLE_PRICE_GROWTH_INTELLIGENCE
+        sync: false
+      - key: PADDLE_PRICE_REVENUE_OS
+        sync: false
 
   - type: web
     name: revenue-os-dashboard
@@ -77,4 +91,3 @@ services:
           property: connectionString
       - key: API_BASE_URL
         sync: false
-

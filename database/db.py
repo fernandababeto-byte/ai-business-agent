@@ -65,6 +65,10 @@ def create_tables():
                     plan TEXT NOT NULL DEFAULT 'revenue_intelligence',
                     trial_started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     trial_ends_at TIMESTAMP,
+                    subscription_status TEXT NOT NULL DEFAULT 'trialing',
+                    billing_customer_id TEXT,
+                    billing_subscription_id TEXT,
+                    subscription_current_period_end TIMESTAMP,
                     is_active BOOLEAN NOT NULL DEFAULT TRUE,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
@@ -234,6 +238,18 @@ def create_tables():
             )
             cursor.execute(
                 """
+                ALTER TABLE tenants
+                ADD COLUMN IF NOT EXISTS subscription_status TEXT NOT NULL DEFAULT 'trialing';
+                ALTER TABLE tenants
+                ADD COLUMN IF NOT EXISTS billing_customer_id TEXT;
+                ALTER TABLE tenants
+                ADD COLUMN IF NOT EXISTS billing_subscription_id TEXT;
+                ALTER TABLE tenants
+                ADD COLUMN IF NOT EXISTS subscription_current_period_end TIMESTAMP;
+                """
+            )
+            cursor.execute(
+                """
                 UPDATE tenants
                 SET plan = 'revenue_intelligence'
                 WHERE plan = 'trial';
@@ -250,6 +266,17 @@ def create_tables():
                 """
                 CREATE INDEX IF NOT EXISTS idx_shopify_connections_tenant
                 ON shopify_connections (tenant_id);
+                """
+            )
+            cursor.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_tenants_billing_customer
+                ON tenants (billing_customer_id)
+                WHERE billing_customer_id IS NOT NULL;
+
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_tenants_billing_subscription
+                ON tenants (billing_subscription_id)
+                WHERE billing_subscription_id IS NOT NULL;
                 """
             )
             cursor.execute(
@@ -303,7 +330,9 @@ def create_tenant(name: str, slug: str, plan: str = "revenue_intelligence"):
                 VALUES (%s, %s, %s, %s, %s)
                 ON CONFLICT (slug) DO UPDATE
                 SET name = EXCLUDED.name
-                RETURNING id, name, slug, plan, trial_started_at, trial_ends_at, is_active;
+                RETURNING id, name, slug, plan, trial_started_at, trial_ends_at,
+                          subscription_status, billing_customer_id, billing_subscription_id,
+                          subscription_current_period_end, is_active;
                 """,
                 (name, slug, plan, now, trial_ends_at)
             )
@@ -317,13 +346,113 @@ def get_tenant_by_slug(slug: str):
         with connection.cursor() as cursor:
             cursor.execute(
                 """
-                SELECT id, name, slug, plan, trial_started_at, trial_ends_at, is_active
+                SELECT id, name, slug, plan, trial_started_at, trial_ends_at,
+                       subscription_status, billing_customer_id, billing_subscription_id,
+                       subscription_current_period_end, is_active
                 FROM tenants
                 WHERE slug = %s;
                 """,
                 (slug,)
             )
             return cursor.fetchone()
+
+
+def get_tenant_by_id(tenant_id: int):
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT id, name, slug, plan, trial_started_at, trial_ends_at,
+                       subscription_status, billing_customer_id, billing_subscription_id,
+                       subscription_current_period_end, is_active, created_at
+                FROM tenants
+                WHERE id = %s;
+                """,
+                (tenant_id,)
+            )
+            return cursor.fetchone()
+
+
+def list_tenants():
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT id, name, slug, plan, trial_started_at, trial_ends_at,
+                       subscription_status, billing_customer_id, billing_subscription_id,
+                       subscription_current_period_end, is_active, created_at
+                FROM tenants
+                ORDER BY created_at DESC;
+                """
+            )
+            return cursor.fetchall()
+
+
+def update_tenant_subscription(
+    tenant_id: int,
+    *,
+    plan: str | None = None,
+    subscription_status: str | None = None,
+    billing_customer_id: str | None = None,
+    billing_subscription_id: str | None = None,
+    subscription_current_period_end=None,
+):
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE tenants
+                SET plan = COALESCE(%s, plan),
+                    subscription_status = COALESCE(%s, subscription_status),
+                    billing_customer_id = COALESCE(%s, billing_customer_id),
+                    billing_subscription_id = COALESCE(%s, billing_subscription_id),
+                    subscription_current_period_end = COALESCE(%s, subscription_current_period_end)
+                WHERE id = %s
+                RETURNING id, name, slug, plan, trial_started_at, trial_ends_at,
+                          subscription_status, billing_customer_id, billing_subscription_id,
+                          subscription_current_period_end, is_active;
+                """,
+                (
+                    plan,
+                    subscription_status,
+                    billing_customer_id,
+                    billing_subscription_id,
+                    subscription_current_period_end,
+                    tenant_id,
+                )
+            )
+            tenant = cursor.fetchone()
+        connection.commit()
+        return tenant
+
+
+def update_tenant_subscription_by_billing_id(
+    billing_subscription_id: str,
+    *,
+    subscription_status: str,
+    subscription_current_period_end=None,
+):
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE tenants
+                SET subscription_status = %s,
+                    subscription_current_period_end = COALESCE(%s, subscription_current_period_end)
+                WHERE billing_subscription_id = %s
+                RETURNING id, name, slug, plan, trial_started_at, trial_ends_at,
+                          subscription_status, billing_customer_id, billing_subscription_id,
+                          subscription_current_period_end, is_active;
+                """,
+                (
+                    subscription_status,
+                    subscription_current_period_end,
+                    billing_subscription_id,
+                )
+            )
+            tenant = cursor.fetchone()
+        connection.commit()
+        return tenant
 
 
 def create_user(
@@ -371,6 +500,10 @@ def get_user_by_email(email: str):
                     tenants.plan AS tenant_plan,
                     tenants.trial_started_at AS tenant_trial_started_at,
                     tenants.trial_ends_at AS tenant_trial_ends_at,
+                    tenants.subscription_status AS tenant_subscription_status,
+                    tenants.billing_customer_id AS tenant_billing_customer_id,
+                    tenants.billing_subscription_id AS tenant_billing_subscription_id,
+                    tenants.subscription_current_period_end AS tenant_subscription_current_period_end,
                     tenants.is_active AS tenant_is_active
                 FROM users
                 JOIN tenants ON tenants.id = users.tenant_id
@@ -398,6 +531,10 @@ def get_user_by_id(user_id: int):
                     tenants.plan AS tenant_plan,
                     tenants.trial_started_at AS tenant_trial_started_at,
                     tenants.trial_ends_at AS tenant_trial_ends_at,
+                    tenants.subscription_status AS tenant_subscription_status,
+                    tenants.billing_customer_id AS tenant_billing_customer_id,
+                    tenants.billing_subscription_id AS tenant_billing_subscription_id,
+                    tenants.subscription_current_period_end AS tenant_subscription_current_period_end,
                     tenants.is_active AS tenant_is_active
                 FROM users
                 JOIN tenants ON tenants.id = users.tenant_id

@@ -3,6 +3,7 @@ import os
 import threading
 
 from database.db import list_connected_shopify_tenants
+from services.billing_service import get_billing_status
 from services.shopify_service import sync_shopify_store
 
 
@@ -25,6 +26,9 @@ def sync_all_connected_shopify_stores():
     for connection in list_connected_shopify_tenants():
         tenant_id = connection["tenant_id"]
         try:
+            if not get_billing_status(tenant_id)["has_access"]:
+                logger.info("Skipping Shopify sync for expired tenant %s", tenant_id)
+                continue
             snapshot = sync_shopify_store(tenant_id)
             results.append(
                 {
