@@ -29,8 +29,8 @@ O sistema foi desenvolvido para transformar dados empresariais em insights estra
 - KPIs empresariais
 - Receita total
 - Receita média
-- Melhor setor
-- Setor crítico
+- Segmento Shopify com maior receita
+- Segmento Shopify em revisão operacional
 - Previsão inteligente de vendas
 
 ---
@@ -62,7 +62,7 @@ Gera:
 Analisa:
 
 - Performance de vendas
-- Setores estratégicos
+- Segmentos Shopify estratégicos
 - Crescimento comercial
 - Oportunidades de mercado
 
@@ -94,7 +94,7 @@ Sistema de previsão inteligente utilizando:
 Permite perguntas como:
 
 - "Faça uma análise estratégica"
-- "Qual setor apresenta maior crescimento?"
+- "Qual segmento Shopify apresenta maior crescimento?"
 - "Crie um resumo executivo"
 - "Analise os dados financeiros"
 

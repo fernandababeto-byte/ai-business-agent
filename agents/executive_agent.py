@@ -13,12 +13,12 @@ class ExecutiveAgent:
         total_sales = dataframe["vendas"].sum()
         average_sales = dataframe["vendas"].mean()
 
-        best_sector = dataframe.loc[
+        best_segment = dataframe.loc[
             dataframe["vendas"].idxmax(),
             "setor"
         ]
 
-        worst_sector = dataframe.loc[
+        review_segment = dataframe.loc[
             dataframe["vendas"].idxmin(),
             "setor"
         ]
@@ -43,13 +43,13 @@ R$ {total_sales:,.2f}
 Receita média:
 R$ {average_sales:,.2f}
 
-Melhor setor:
-{best_sector}
+Segmento Shopify com maior receita:
+{best_segment}
 
-Pior setor:
-{worst_sector}
+Segmento Shopify em revisao operacional:
+{review_segment}
 
-Tabela de vendas:
+Tabela de receita por segmento Shopify:
 {table_data}
 
 Estrutura obrigatória:
@@ -57,10 +57,10 @@ Estrutura obrigatória:
 1. Resumo Executivo
 Explique o cenário geral da empresa.
 
-2. Melhor Setor
-Explique por que o setor de melhor desempenho se destaca.
+2. Segmento com Maior Receita
+Explique por que esse segmento Shopify se destaca.
 
-3. Pior Setor
+3. Segmento em Revisao Operacional
 Explique possíveis causas do baixo desempenho.
 
 4. Insights Estratégicos
@@ -70,7 +70,7 @@ Liste insights estratégicos claros e completos.
 Crie recomendações práticas e detalhadas.
 
 Use português profissional.
-Use somente os dados fornecidos. Nao invente metricas, percentuais ou categorias.
+Use somente os dados fornecidos. Nao invente metricas, percentuais, setores ou categorias.
 """
 
         response = self.client.chat.completions.create(

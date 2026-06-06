@@ -1325,6 +1325,29 @@ def render_billing_center(billing_status, access_token):
     except Exception:
         pass
 
+    current_user = st.session_state.get("saas_user") or {}
+    if is_platform_admin(current_user):
+        try:
+            leads_response = requests.get(
+                f"{API_BASE_URL}/leads",
+                headers={"Authorization": f"Bearer {access_token}"},
+                timeout=8,
+            )
+            if leads_response.ok:
+                leads = leads_response.json().get("leads", [])
+                vertical_spacer()
+                section_header(
+                    "EARLY ACCESS PIPELINE",
+                    "Shopify Leads Captured",
+                    "Operators who requested access from the public validation page.",
+                )
+                if leads:
+                    st.dataframe(leads, use_container_width=True, hide_index=True)
+                else:
+                    st.info("No early-access leads captured yet.")
+        except Exception:
+            pass
+
 
 def is_platform_admin(user):
     platform_admin_email = os.getenv(
@@ -1335,6 +1358,99 @@ def is_platform_admin(user):
         platform_admin_email
         and str(user.get("email") or "").strip().lower() == platform_admin_email
     )
+
+
+def render_public_landing():
+    landing_html = """
+    <div class="ai-card" style="border-color:rgba(45,212,191,0.34); background:linear-gradient(135deg, rgba(15,23,42,0.98), rgba(8,47,73,0.72));">
+        <div class="ai-badge">AI REVENUE OPERATING SYSTEM FOR SHOPIFY</div>
+        <div style="font-size:48px; line-height:1.02; font-weight:950; color:#F8FAFC; max-width:980px; margin-top:18px;">
+            Protect Shopify Revenue Before Growth Leaks Become Expensive
+        </div>
+        <div style="font-size:17px; line-height:1.65; color:#BAE6FD; max-width:920px; margin-top:18px;">
+            Built for growing Shopify operators in Canada and Australia. Detect revenue leakage, forecast growth,
+            prioritize opportunities and monitor operational risk before hidden issues become lost profit.
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:14px; margin-top:26px;">
+            <div class="metric-card"><div class="metric-label">TRIAL</div><div class="metric-value">14 days</div><div class="metric-desc">No card during validation</div></div>
+            <div class="metric-card"><div class="metric-label">STARTING PLAN</div><div class="metric-value">US$99/mo</div><div class="metric-desc">Revenue Intelligence</div></div>
+            <div class="metric-card"><div class="metric-label">CORE SIGNAL</div><div class="metric-value">Leakage</div><div class="metric-desc">Revenue risk monitoring</div></div>
+            <div class="metric-card"><div class="metric-label">CHANNEL</div><div class="metric-value">Shopify</div><div class="metric-desc">Built around store data</div></div>
+        </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:minmax(0,1.05fr) minmax(320px,0.95fr); gap:22px; margin-top:22px;">
+        <div class="ai-card">
+            <div class="ai-badge">WHY STORES TEST IT</div>
+            <div class="ai-title">A daily revenue control room, not another analytics tab</div>
+            <div class="ai-subtitle">
+                Revenue OS monitors orders, products, inventory exposure, retention stability and operational risk.
+                The goal is simple: help the operator see what could cost money before it becomes expensive.
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-top:18px;">
+                <div class="metric-card"><div class="metric-label">01</div><div class="metric-value">Revenue Leakage</div><div class="metric-desc">Find hidden drag in store performance</div></div>
+                <div class="metric-card"><div class="metric-label">02</div><div class="metric-value">Growth Forecast</div><div class="metric-desc">Project near-term revenue direction</div></div>
+                <div class="metric-card"><div class="metric-label">03</div><div class="metric-value">Risk Center</div><div class="metric-desc">Watch inventory and operational exposure</div></div>
+            </div>
+        </div>
+        <div class="ai-card" style="border-color:rgba(96,165,250,0.32);">
+            <div class="ai-badge">PRODUCT PREVIEW</div>
+            <div class="ai-title">Executive monitoring from live Shopify signals</div>
+            <div style="margin-top:18px; display:grid; gap:10px;">
+                <div class="static-bar-row"><div class="static-bar-label">Imported Revenue</div><div class="static-bar-track"><div class="static-bar-fill" style="width:82%"></div></div><div class="static-bar-value">Live</div></div>
+                <div class="static-bar-row"><div class="static-bar-label">Orders Synced</div><div class="static-bar-track"><div class="static-bar-fill" style="width:68%"></div></div><div class="static-bar-value">Active</div></div>
+                <div class="static-bar-row"><div class="static-bar-label">Inventory Risk</div><div class="static-bar-track"><div class="static-bar-fill" style="width:44%"></div></div><div class="static-bar-value">Watch</div></div>
+                <div class="static-bar-row"><div class="static-bar-label">Revenue Alerts</div><div class="static-bar-track"><div class="static-bar-fill" style="width:58%"></div></div><div class="static-bar-value">Email/WhatsApp</div></div>
+            </div>
+        </div>
+    </div>
+    """
+    st.markdown(landing_html, unsafe_allow_html=True)
+
+    vertical_spacer()
+    section_header(
+        "EARLY ACCESS",
+        "Request a 14-Day Shopify Revenue Trial",
+        "Use a business email. Approved stores receive private workspace access before paid billing is activated.",
+    )
+
+    with st.form("lead_capture_form"):
+        col_email, col_store = st.columns(2, gap="large")
+        with col_email:
+            lead_email = st.text_input("Business email", placeholder="owner@store.com")
+        with col_store:
+            lead_store = st.text_input("Shopify store URL", placeholder="your-store.myshopify.com")
+        revenue_band = st.selectbox(
+            "Monthly Shopify revenue",
+            [
+                "Under US$50k",
+                "US$50k - US$250k",
+                "US$250k - US$1M",
+                "US$1M+",
+                "Not ready to say",
+            ],
+        )
+        submitted_lead = st.form_submit_button("Request Early Access")
+
+    if submitted_lead:
+        try:
+            response = requests.post(
+                f"{API_BASE_URL}/leads",
+                json={
+                    "email": lead_email,
+                    "store_url": lead_store,
+                    "revenue_band": revenue_band,
+                    "source": "public_landing",
+                },
+                timeout=10,
+            )
+            if not response.ok:
+                raise ValueError(response.json().get("detail", response.text))
+            st.success("Request received. Your store is now in the early-access pipeline.")
+        except Exception as error:
+            st.error(f"Could not save the request: {error}")
+
+    vertical_spacer()
 
 
 def render_static_bar_chart(dataframe):
@@ -1388,6 +1504,22 @@ def get_category_icon(label):
     if "finance" in label_lower:
         return "💰"
     return "◆"
+
+
+def get_category_icon(label):
+    """Stable executive markers for Shopify segment legends."""
+    label_lower = str(label).lower()
+    if "product" in label_lower or "item" in label_lower:
+        return "P"
+    if "inventory" in label_lower or "stock" in label_lower:
+        return "I"
+    if "customer" in label_lower or "buyer" in label_lower:
+        return "C"
+    if "discount" in label_lower:
+        return "D"
+    if "order" in label_lower:
+        return "O"
+    return "S"
 
 
 def render_static_donut_chart(dataframe):
@@ -1501,7 +1633,7 @@ def render_forecast_section_stable(current_revenue, forecast_revenue, forecast_g
     with cols[1]:
         render_metric_card("Projected Revenue", format_currency(forecast_revenue), description="Synced order-value scenario")
     with cols[2]:
-        render_metric_card("Scale Category", best_category, description="Highest potential")
+        render_metric_card("Scale Segment", best_category, description="Highest potential")
 
     st.markdown(
         f"""
@@ -1649,8 +1781,16 @@ def build_shopify_category_dataframe(snapshot, is_connected=False):
 
 
 def premium_dataframe(dataframe, height=290, key=None):
+    display_dataframe = dataframe.rename(
+        columns={
+            "setor": "Shopify revenue segment",
+            "vendas": "Revenue",
+            "custos": "Costs",
+            "funcionarios": "Operators",
+        }
+    )
     styled_dataframe = (
-        dataframe.style
+        display_dataframe.style
         .set_table_styles(
             [
                 {
@@ -1808,8 +1948,8 @@ def render_summary(best_sector, lowest_sector, total_sales, next_prediction):
         f"""
         <div class="insight-card">
             <div class="insight-title">Executive Summary</div>
-            <div class="insight-item">Top performance category: <strong>{html.escape(str(best_sector))}</strong>.</div>
-            <div class="insight-item">Operational risk category: <strong>{html.escape(str(lowest_sector))}</strong>.</div>
+            <div class="insight-item">Top Shopify segment: <strong>{html.escape(str(best_sector))}</strong>.</div>
+            <div class="insight-item">Operational review segment: <strong>{html.escape(str(lowest_sector))}</strong>.</div>
             <div class="insight-item">Revenue monitored: <strong>{format_currency(total_sales)}</strong>.</div>
             <div class="insight-item">AI forecast estimate: <strong>{format_currency(next_prediction)}</strong>.</div>
         </div>
@@ -1832,8 +1972,8 @@ def render_ai_live_pulse(ctx):
     )
 
     pulse_cards = [
-        ("SHOPIFY SIGNAL", "Leading category", f"{best} currently leads synchronized category revenue.", "SHOPIFY DATA", "NOW"),
-        ("OPERATIONAL REVIEW", "Lowest category revenue", f"{risk} is the current review category based on synchronized order line items.", "REVIEW REQUIRED", "SYNCED"),
+        ("SHOPIFY SIGNAL", "Leading segment", f"{best} currently leads synchronized Shopify revenue.", "SHOPIFY DATA", "NOW"),
+        ("OPERATIONAL REVIEW", "Lowest segment revenue", f"{risk} is the current review segment based on synchronized order line items.", "REVIEW REQUIRED", "SYNCED"),
         ("FORECAST UPDATE", "Next-order scenario", f"Latest synchronized order-value growth signal: {growth:.1f}%.", "SHOPIFY DATA", "LIVE"),
         ("REVENUE ENGINE", "Protection layer active", f"{revenue} is currently imported from Shopify.", "SHOPIFY DATA", "SYNCED"),
     ]
@@ -1862,10 +2002,10 @@ def render_live_executive_ticker(ctx):
     risk = html.escape(str(ctx["shopify_risk_category"]))
     items = [
         "AI monitoring synchronized across Shopify revenue signals",
-        f"Leading synchronized revenue category: {best}",
+        f"Leading synchronized Shopify segment: {best}",
         "Next-order scenario updated from synchronized Shopify values",
-        f"Operational review category: {risk}",
-        "Opportunity engine active and scanning category performance",
+        f"Operational review segment: {risk}",
+        "Opportunity engine active and scanning Shopify performance",
         "Revenue protection layer synchronized",
     ]
     doubled = items + items
@@ -1894,7 +2034,7 @@ def render_executive_conversion_strip(ctx):
         '<div class="executive-conversion-main">'
         '<div class="executive-conversion-label"><span class="ai-pulse-dot"></span>EXECUTIVE REVENUE INTELLIGENCE</div>'
         '<div class="executive-conversion-title">Your Shopify snapshot is active for operational review.</div>'
-        f'<div class="executive-conversion-desc"><b>{risk}</b> is the lowest synchronized category and <b>{best}</b> currently leads synchronized category revenue.</div>'
+        f'<div class="executive-conversion-desc"><b>{risk}</b> is the lowest synchronized segment and <b>{best}</b> currently leads synchronized Shopify revenue.</div>'
         '<div class="executive-conversion-trend">AI operating layer active</div>'
         '</div>'
         '<div class="executive-conversion-mini">'
@@ -2038,9 +2178,9 @@ def render_ai_decision_feed(ctx):
     snapshot = ctx.get("shopify_live_snapshot") or {}
     growth_rate = snapshot.get("growth_rate")
     if growth_rate is None:
-        momentum_message = f"{best} leads synchronized Shopify category revenue. Growth history is still collecting."
+        momentum_message = f"{best} leads synchronized Shopify revenue. Growth history is still collecting."
     elif float(growth_rate) >= 0:
-        momentum_message = f"Latest synchronized Shopify order value increased {float(growth_rate):.1f}%. {best} remains the leading revenue category."
+        momentum_message = f"Latest synchronized Shopify order value increased {float(growth_rate):.1f}%. {best} remains the leading revenue segment."
     else:
         momentum_message = f"Latest synchronized Shopify order value decreased {abs(float(growth_rate)):.1f}%. {risk} remains under operational review."
     live_alerts = [
@@ -2104,7 +2244,7 @@ def render_money_moment(ctx):
                 '<div class="money-moment-card">'
                 '<div class="money-moment-label"><span class="ai-pulse-dot"></span>LIVE SHOPIFY REVENUE MOMENT</div>'
                 f'<div class="money-moment-title">{format_shopify_currency(total_revenue, currency_code)} imported from {order_count} Shopify orders.</div>'
-                '<div class="money-moment-desc">The operating layer is collecting live order history. Revenue, ticket size and inventory are already monitored; deeper leakage and category recommendations will activate as the store accumulates more sales data.</div>'
+                '<div class="money-moment-desc">The operating layer is collecting live order history. Revenue, ticket size and inventory are already monitored; deeper leakage and Shopify segment recommendations will activate as the store accumulates more sales data.</div>'
                 '<div class="money-moment-grid">'
                 f'<div class="money-moment-mini"><div class="money-moment-mini-label">Average Order Value</div><div class="money-moment-mini-value">{format_shopify_currency(average_order_value, currency_code)}</div></div>'
                 f'<div class="money-moment-mini"><div class="money-moment-mini-label">Initial Forecast</div><div class="money-moment-mini-value">{format_shopify_currency(forecast_revenue, currency_code)}</div></div>'
@@ -2211,9 +2351,9 @@ def render_ai_advisor_action(ctx):
     st.markdown(
         f"""
         <div class="ai-advisor-action">
-            <div class="ai-advisor-action-title">Review {best} as the leading revenue category while keeping {risk} under operational review.</div>
+            <div class="ai-advisor-action-title">Review {best} as the leading revenue segment while keeping {risk} under operational review.</div>
             <div class="ai-advisor-action-desc">
-                The synchronized Shopify snapshot shows stronger category revenue in {best}. Keep {risk} under monitoring and validate the next-order scenario against new sales. Latest order-value growth signal: <b>{growth:.1f}%</b>.
+                The synchronized Shopify snapshot shows stronger revenue in {best}. Keep {risk} under monitoring and validate the next-order scenario against new sales. Latest order-value growth signal: <b>{growth:.1f}%</b>.
             </div>
         </div>
         """,
@@ -2226,8 +2366,8 @@ def render_charts(filtered_df):
     with chart_col:
         section_header(
             "REVENUE PERFORMANCE",
-            "Executive Category Performance",
-            "Consolidated revenue by category with premium static visualization.",
+            "Executive Shopify Segment Performance",
+            "Consolidated revenue by Shopify segment with premium static visualization.",
         )
         render_static_bar_chart(filtered_df)
 
@@ -2235,7 +2375,7 @@ def render_charts(filtered_df):
         section_header(
             "REVENUE MIX",
             "Distribution",
-            "Revenue share by category.",
+            "Revenue share by Shopify segment.",
         )
         render_static_donut_chart(filtered_df)
 
@@ -2251,7 +2391,7 @@ def render_shopify_metrics(shopify_average_revenue):
         {"title": "CAC", "value": "Not tracked", "desc": "Requires attributed acquisition cost data."},
         {"title": "LTV", "value": "Not tracked", "desc": "Requires repeat purchase history."},
         {"title": "CHURN", "value": "Not tracked", "desc": "Requires customer retention history."},
-        {"title": "AOV", "value": format_currency(shopify_average_revenue), "desc": "Average revenue analyzed by category."},
+        {"title": "AOV", "value": format_currency(shopify_average_revenue), "desc": "Average revenue analyzed by Shopify segment."},
         {"title": "VIP CUSTOMERS", "value": "Not tracked", "desc": "Requires customer segmentation history."},
     ]
     for index in range(0, len(enterprise_metrics), 3):
@@ -2287,7 +2427,7 @@ def render_health_score(shopify_growth_score, shopify_total_revenue, forecast_gr
                 <div style="font-size:14px; line-height:1.48; color:#CBD5E1;">
                     • Executive composite score: <b>Not tracked</b>.<br><br>
                     • Connect margin, campaign and retention data to activate a composite score.<br><br>
-                    • Strongest operational category: <b>{html.escape(str(shopify_best_category))}</b>.<br><br>
+                    • Strongest operational segment: <b>{html.escape(str(shopify_best_category))}</b>.<br><br>
                     • Main attention area: <b>{html.escape(str(shopify_risk_category))}</b>.<br><br>
                     • Recommendation: progressive expansion with continuous monitoring.
                 </div>
@@ -2330,7 +2470,7 @@ def render_autonomous_monitoring(shopify_growth_score, shopify_total_revenue, sh
         executive_level = "ENTERPRISE" if len(autonomous_alerts) >= 4 else "GROWTH" if len(autonomous_alerts) >= 2 else "STABLE"
         render_metric_card("Operational Level", executive_level, description="AI system")
     with alert_col3:
-        render_metric_card("Priority Action", shopify_best_category, description="Focus category")
+        render_metric_card("Priority Action", shopify_best_category, description="Focus segment")
 
     st.markdown(
         """
@@ -2477,7 +2617,7 @@ def render_forecast_intelligence(ctx):
     section_header(
         "FORECAST",
         "Growth Forecast",
-        "Predictive revenue view for expansion, downside monitoring and category planning.",
+        "Predictive revenue view for expansion, downside monitoring and Shopify segment planning.",
     )
 
     trend_col1, trend_col2 = st.columns([2, 1], gap="large")
@@ -2528,14 +2668,14 @@ def render_strategic_decisions(ctx):
     with strategy_col2:
         render_metric_card("Strategic Level", ctx["strategic_level"], description="Shopify synchronization status")
     with strategy_col3:
-        render_metric_card("Leading Category", ctx["shopify_best_category"], description="Highest synchronized category revenue")
+        render_metric_card("Leading Segment", ctx["shopify_best_category"], description="Highest synchronized Shopify revenue")
 
     st.markdown(
         f"""
         <div class="ai-response-box">
             <b>Shopify Operational Review:</b><br><br>
-            &bull; <b>{html.escape(str(ctx['shopify_best_category']))}</b> leads synchronized category revenue and should be reviewed first.<br><br>
-            &bull; <b>{html.escape(str(ctx['shopify_risk_category']))}</b> has the lowest synchronized category revenue and requires operational review.<br><br>
+            &bull; <b>{html.escape(str(ctx['shopify_best_category']))}</b> leads synchronized Shopify revenue and should be reviewed first.<br><br>
+            &bull; <b>{html.escape(str(ctx['shopify_risk_category']))}</b> has the lowest synchronized Shopify revenue and requires operational review.<br><br>
             &bull; Margin, campaign attribution and retention data are not connected yet.<br><br>
             &bull; Review inventory availability and new orders before changing acquisition spend.
         </div>
@@ -2697,15 +2837,15 @@ def render_ai_copilot(ctx):
         if "leak" in normalized_question or "vaz" in normalized_question:
             focus = "Revenue leakage"
             answer = (
-                f"Signal: {risk} is the lowest synchronized revenue category. This is a review signal, not confirmed leakage. "
-                f"Why it matters: lower category revenue can indicate a merchandising, inventory or fulfillment issue. "
+                f"Signal: {risk} is the lowest synchronized revenue segment. This is a review signal, not confirmed leakage. "
+                f"Why it matters: lower segment revenue can indicate a merchandising, inventory or fulfillment issue. "
                 f"Next move: review synchronized orders and inventory for {risk} before changing budget."
             )
         elif "scale" in normalized_question or "opportun" in normalized_question:
             focus = "Scale opportunity"
             answer = (
-                f"Signal: {best} currently leads synchronized category revenue. "
-                f"Why it matters: it is the first category to review for a controlled scale test. "
+                f"Signal: {best} currently leads synchronized Shopify revenue. "
+                f"Why it matters: it is the first segment to review for a controlled scale test. "
                 f"Next move: validate stock availability and compare new orders before increasing acquisition spend."
             )
         elif "protect" in normalized_question or "protection" in normalized_question:
@@ -2725,7 +2865,7 @@ def render_ai_copilot(ctx):
         else:
             focus = "Executive revenue decision"
             answer = (
-                f"Signal: {best} leads synchronized category revenue while {risk} is the lowest revenue category. "
+                f"Signal: {best} leads synchronized Shopify revenue while {risk} is the lowest revenue segment. "
                 f"Why it matters: these are operational review signals derived from the Shopify snapshot. "
                 f"Next move: review inventory, new orders and the next-order scenario of {forecast} before acting."
             )
@@ -2754,9 +2894,9 @@ def render_data_center(ctx):
         section_header(
             "SHOPIFY DATA AUDIT",
             "Live Shopify Import",
-            "Revenue categories derived from synchronized Shopify order line items.",
+            "Revenue streams derived from synchronized Shopify order line items.",
         )
-        st.markdown("### Shopify category revenue")
+        st.markdown("### Shopify segment revenue")
         premium_dataframe(ctx["shopify_category_df"], height=300, key="shopify_category_revenue")
         st.info(
             "Shopify is the active operating source. CSV and XLSX uploads remain available "
@@ -2784,9 +2924,9 @@ def render_data_center(ctx):
     )
     st.markdown("### Upload source")
     st.info("Use the left sidebar Data Source area to upload CSV or XLSX files.")
-    st.markdown("### Raw Preview")
+    st.markdown("### Upload Preview")
     premium_dataframe(ctx["original_df"].head(20), height=300, key="data_center_raw_preview")
-    st.markdown("### Treated Data")
+    st.markdown("### Clean Revenue Data")
     premium_dataframe(ctx["filtered_df"], height=300, key="data_center_treated_data")
 
 
@@ -3123,11 +3263,13 @@ if "saas_user" not in st.session_state:
     st.session_state.saas_user = None
 
 if st.session_state.saas_user is None:
+    render_public_landing()
+
     login_html = """
     <div class="login-card">
-        <div class="ai-badge">MULTI-CLIENT SAAS</div>
-        <div class="login-title">Company Access</div>
-        <div class="login-subtitle">Sign in with your business email to access your company's isolated revenue workspace.</div>
+        <div class="ai-badge">CLIENT ACCESS</div>
+        <div class="login-title">Company Workspace Login</div>
+        <div class="login-subtitle">Approved customers can sign in to their isolated Shopify revenue workspace.</div>
     </div>
     """
     st.markdown(login_html, unsafe_allow_html=True)
@@ -3146,7 +3288,7 @@ if st.session_state.saas_user is None:
         else:
             st.error("Invalid email or password.")
 
-    st.info("Use the bootstrap user configured in .env to access the first tenant.")
+    st.info("Client access is private. Early-access applicants receive credentials after approval.")
     st.stop()
 
 current_user = st.session_state.saas_user
@@ -3315,7 +3457,7 @@ selected_page = st.sidebar.selectbox(
 st.sidebar.markdown("## Operating Filters")
 available_sectors = sorted(filtered_df["setor"].unique())
 selected_sector = st.sidebar.selectbox(
-    "Category",
+    "Shopify segment",
     options=["All"] + available_sectors,
     index=0,
     key="sidebar_category_filter_v3",

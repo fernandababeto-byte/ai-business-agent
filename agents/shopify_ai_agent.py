@@ -17,15 +17,15 @@ class ShopifyAIAgent:
 
             total_revenue = dataframe["vendas"].sum()
             average_revenue = dataframe["vendas"].mean()
-            best_category = dataframe.loc[dataframe["vendas"].idxmax(), "setor"]
-            worst_category = dataframe.loc[dataframe["vendas"].idxmin(), "setor"]
+            best_segment = dataframe.loc[dataframe["vendas"].idxmax(), "setor"]
+            review_segment = dataframe.loc[dataframe["vendas"].idxmin(), "setor"]
 
             insights.append(f"Receita total analisada: R$ {total_revenue:,.2f}")
-            insights.append(f"Receita media por categoria: R$ {average_revenue:,.2f}")
+            insights.append(f"Receita media por segmento Shopify: R$ {average_revenue:,.2f}")
             insights.append(
-                f"Categoria com maior potencial de crescimento: {best_category}"
+                f"Segmento Shopify com maior potencial de crescimento: {best_segment}"
             )
-            insights.append(f"Categoria com menor desempenho atual: {worst_category}")
+            insights.append(f"Segmento Shopify em revisao operacional: {review_segment}")
 
             prompt = f"""
             Voce e um especialista em Shopify,
@@ -44,7 +44,7 @@ class ShopifyAIAgent:
 
             {dataframe.to_string(index=False)}
 
-            Use somente os dados fornecidos. Nao invente metricas, percentuais ou categorias.
+            Use somente os dados fornecidos. Nao invente metricas, percentuais, setores ou categorias.
             Responda em portugues profissional.
             """
 

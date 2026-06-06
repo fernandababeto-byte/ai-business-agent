@@ -209,6 +209,18 @@ def create_tables():
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE (alert_id, channel)
                 );
+
+                CREATE TABLE IF NOT EXISTS marketing_leads (
+                    id SERIAL PRIMARY KEY,
+                    email TEXT UNIQUE NOT NULL,
+                    store_url TEXT NOT NULL DEFAULT '',
+                    revenue_band TEXT NOT NULL DEFAULT '',
+                    source TEXT NOT NULL DEFAULT 'landing',
+                    status TEXT NOT NULL DEFAULT 'new',
+                    notes TEXT NOT NULL DEFAULT '',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
                 """
             )
 
@@ -313,6 +325,12 @@ def create_tables():
                 """
                 CREATE INDEX IF NOT EXISTS idx_notification_deliveries_tenant
                 ON notification_deliveries (tenant_id, updated_at DESC);
+                """
+            )
+            cursor.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_marketing_leads_created_at
+                ON marketing_leads (created_at DESC);
                 """
             )
         connection.commit()
@@ -588,6 +606,52 @@ def get_chat_history(tenant_id: int | None = None, limit: int = 10):
                     (tenant_id, limit)
                 )
 
+            return cursor.fetchall()
+
+
+def create_marketing_lead(
+    email: str,
+    store_url: str = "",
+    revenue_band: str = "",
+    source: str = "landing",
+):
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO marketing_leads (email, store_url, revenue_band, source)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (email) DO UPDATE
+                SET store_url = EXCLUDED.store_url,
+                    revenue_band = EXCLUDED.revenue_band,
+                    source = EXCLUDED.source,
+                    updated_at = CURRENT_TIMESTAMP
+                RETURNING id, email, store_url, revenue_band, source, status, created_at, updated_at;
+                """,
+                (
+                    email.strip().lower(),
+                    store_url.strip(),
+                    revenue_band.strip(),
+                    source.strip() or "landing",
+                ),
+            )
+            lead = cursor.fetchone()
+        connection.commit()
+        return lead
+
+
+def list_marketing_leads(limit: int = 100):
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT id, email, store_url, revenue_band, source, status, created_at, updated_at
+                FROM marketing_leads
+                ORDER BY updated_at DESC
+                LIMIT %s;
+                """,
+                (limit,),
+            )
             return cursor.fetchall()
 
 

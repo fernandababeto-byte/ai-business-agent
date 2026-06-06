@@ -18,6 +18,6 @@ def prepare_sales_dataframe(dataframe: pd.DataFrame) -> pd.DataFrame:
     df = df.dropna(subset=["setor", "vendas"])
 
     if df.empty:
-        raise ValueError("Nenhuma linha com setor e vendas validos foi encontrada.")
+        raise ValueError("Nenhuma linha com segmento Shopify e receita validos foi encontrada.")
 
     return df

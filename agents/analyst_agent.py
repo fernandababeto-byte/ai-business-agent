@@ -68,7 +68,7 @@ class AnalystAgent:
 
         lucro_total = total_vendas - total_custos
 
-        melhor_setor = self.data.loc[
+        melhor_segmento = self.data.loc[
             self.data["vendas"].idxmax()
         ]["setor"]
 
@@ -80,7 +80,7 @@ class AnalystAgent:
 
         print(f"Lucro total estimado: {lucro_total}")
 
-        print(f"Setor com maior venda: {melhor_setor}")
+        print(f"Segmento Shopify com maior receita: {melhor_segmento}")
 
     def run(self):
 

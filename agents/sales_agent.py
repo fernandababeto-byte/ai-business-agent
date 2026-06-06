@@ -12,7 +12,7 @@ class SalesAgent:
 
         total_sales = dataframe["vendas"].sum()
 
-        best_sector = dataframe.loc[
+        best_segment = dataframe.loc[
             dataframe["vendas"].idxmax(),
             "setor"
         ]
@@ -24,7 +24,7 @@ class SalesAgent:
 
         Receita total: {total_sales}
 
-        Melhor setor: {best_sector}
+        Segmento Shopify com maior receita: {best_segment}
 
         Gere:
         - análise comercial;
@@ -32,7 +32,7 @@ class SalesAgent:
         - estratégias;
         - recomendações de crescimento.
 
-        Use somente os dados fornecidos. Nao invente metricas, percentuais ou categorias.
+        Use somente os dados fornecidos. Nao invente metricas, percentuais, setores ou categorias.
         """
 
         response = self.client.chat.completions.create(

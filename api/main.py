@@ -13,9 +13,11 @@ from database.db import (
     create_tenant,
     create_tables,
     create_user,
+    create_marketing_lead,
     get_notification_deliveries,
     get_notification_preferences,
     get_revenue_alerts,
+    list_marketing_leads,
     save_notification_preferences,
     save_chat_message,
     get_chat_history,
@@ -91,6 +93,13 @@ class NotificationPreferencesUpdate(BaseModel):
 
 class BillingCheckoutRequest(BaseModel):
     plan_key: str = Field(min_length=3)
+
+
+class MarketingLeadCreate(BaseModel):
+    email: str = Field(min_length=5)
+    store_url: str = ""
+    revenue_band: str = ""
+    source: str = "landing"
 
 
 def get_current_user(
@@ -238,6 +247,42 @@ def plans():
         "minimum_price": 99,
         "plans": PLAN_CATALOG,
     }
+
+
+@app.post("/leads")
+def capture_marketing_lead(data: MarketingLeadCreate):
+    email = data.email.strip().lower()
+    if "@" not in email or "." not in email.split("@")[-1]:
+        raise HTTPException(status_code=422, detail="Provide a valid business email.")
+
+    store_url = data.store_url.strip()
+    if store_url and "myshopify.com" not in store_url and "." not in store_url:
+        raise HTTPException(status_code=422, detail="Provide a valid Shopify store URL.")
+
+    lead = create_marketing_lead(
+        email=email,
+        store_url=store_url,
+        revenue_band=data.revenue_band,
+        source=data.source,
+    )
+    return {
+        "status": "received",
+        "message": "Early access request received.",
+        "lead": {
+            "id": lead["id"],
+            "email": lead["email"],
+            "status": lead["status"],
+        },
+    }
+
+
+@app.get("/leads")
+def marketing_leads(
+    limit: int = 100,
+    current_user: dict = Depends(require_platform_admin),
+):
+    safe_limit = min(max(limit, 1), 250)
+    return {"leads": list_marketing_leads(safe_limit)}
 
 
 @app.get("/billing/status")

@@ -1,6 +1,6 @@
 setor,vendas,custos,funcionarios
-Textil,120000,80000,45
-Logistica,95000,60000,30
-Varejo,143000,90000,25
-Tecnologia,210000,120000,18
-Industrial,175000,110000,40
+Best-selling products,120000,80000,45
+Low-stock exposure,95000,60000,30
+Returning customer revenue,143000,90000,25
+New customer revenue,210000,120000,18
+Discount-sensitive orders,175000,110000,40

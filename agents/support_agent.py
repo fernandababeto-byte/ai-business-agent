@@ -57,11 +57,11 @@ class SupportAgent:
 
         average_sales = dataframe[revenue_column].mean()
 
-        best_sector = dataframe.loc[
+        best_segment = dataframe.loc[
             dataframe[revenue_column].idxmax()
         ]
 
-        worst_sector = dataframe.loc[
+        review_segment = dataframe.loc[
             dataframe[revenue_column].idxmin()
         ]
 
@@ -74,11 +74,11 @@ class SupportAgent:
         Receita média:
         R$ {average_sales:,.2f}
 
-        Melhor setor:
-        {best_sector.to_dict()}
+        Segmento Shopify com maior receita:
+        {best_segment.to_dict()}
 
-        Pior setor:
-        {worst_sector.to_dict()}
+        Segmento Shopify em revisao operacional:
+        {review_segment.to_dict()}
 
         Dados completos:
         {dataframe.to_string(index=False)}
@@ -86,7 +86,7 @@ class SupportAgent:
         Pergunta:
         {question}
 
-        Use somente os dados fornecidos. Nao invente metricas, percentuais ou categorias.
+        Use somente os dados fornecidos. Nao invente metricas, percentuais, setores ou categorias.
         """
 
         response = self.client.chat.completions.create(
