@@ -218,6 +218,10 @@ def create_tables():
                     source TEXT NOT NULL DEFAULT 'landing',
                     status TEXT NOT NULL DEFAULT 'new',
                     notes TEXT NOT NULL DEFAULT '',
+                    tenant_id INTEGER REFERENCES tenants(id) ON DELETE SET NULL,
+                    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                    approved_at TIMESTAMP,
+                    trial_activated_at TIMESTAMP,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
@@ -325,6 +329,18 @@ def create_tables():
                 """
                 CREATE INDEX IF NOT EXISTS idx_notification_deliveries_tenant
                 ON notification_deliveries (tenant_id, updated_at DESC);
+                """
+            )
+            cursor.execute(
+                """
+                ALTER TABLE marketing_leads
+                ADD COLUMN IF NOT EXISTS tenant_id INTEGER REFERENCES tenants(id) ON DELETE SET NULL;
+                ALTER TABLE marketing_leads
+                ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+                ALTER TABLE marketing_leads
+                ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP;
+                ALTER TABLE marketing_leads
+                ADD COLUMN IF NOT EXISTS trial_activated_at TIMESTAMP;
                 """
             )
             cursor.execute(
@@ -626,7 +642,9 @@ def create_marketing_lead(
                     revenue_band = EXCLUDED.revenue_band,
                     source = EXCLUDED.source,
                     updated_at = CURRENT_TIMESTAMP
-                RETURNING id, email, store_url, revenue_band, source, status, created_at, updated_at;
+                RETURNING id, email, store_url, revenue_band, source, status, notes,
+                          tenant_id, user_id, approved_at, trial_activated_at,
+                          created_at, updated_at;
                 """,
                 (
                     email.strip().lower(),
@@ -645,7 +663,9 @@ def list_marketing_leads(limit: int = 100):
         with connection.cursor() as cursor:
             cursor.execute(
                 """
-                SELECT id, email, store_url, revenue_band, source, status, created_at, updated_at
+                SELECT id, email, store_url, revenue_band, source, status, notes,
+                       tenant_id, user_id, approved_at, trial_activated_at,
+                       created_at, updated_at
                 FROM marketing_leads
                 ORDER BY updated_at DESC
                 LIMIT %s;
@@ -653,6 +673,79 @@ def list_marketing_leads(limit: int = 100):
                 (limit,),
             )
             return cursor.fetchall()
+
+
+def get_marketing_lead(lead_id: int):
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT id, email, store_url, revenue_band, source, status, notes,
+                       tenant_id, user_id, approved_at, trial_activated_at,
+                       created_at, updated_at
+                FROM marketing_leads
+                WHERE id = %s;
+                """,
+                (lead_id,),
+            )
+            return cursor.fetchone()
+
+
+def update_marketing_lead_status(
+    lead_id: int,
+    status: str,
+    notes: str = "",
+):
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE marketing_leads
+                SET status = %s,
+                    notes = COALESCE(NULLIF(%s, ''), notes),
+                    approved_at = CASE
+                        WHEN %s = 'qualified' THEN COALESCE(approved_at, CURRENT_TIMESTAMP)
+                        ELSE approved_at
+                    END,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                RETURNING id, email, store_url, revenue_band, source, status, notes,
+                          tenant_id, user_id, approved_at, trial_activated_at,
+                          created_at, updated_at;
+                """,
+                (status, notes.strip(), status, lead_id),
+            )
+            lead = cursor.fetchone()
+        connection.commit()
+        return lead
+
+
+def attach_marketing_lead_trial(
+    lead_id: int,
+    tenant_id: int,
+    user_id: int,
+):
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE marketing_leads
+                SET status = 'trial_active',
+                    tenant_id = %s,
+                    user_id = %s,
+                    approved_at = COALESCE(approved_at, CURRENT_TIMESTAMP),
+                    trial_activated_at = COALESCE(trial_activated_at, CURRENT_TIMESTAMP),
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                RETURNING id, email, store_url, revenue_band, source, status, notes,
+                          tenant_id, user_id, approved_at, trial_activated_at,
+                          created_at, updated_at;
+                """,
+                (tenant_id, user_id, lead_id),
+            )
+            lead = cursor.fetchone()
+        connection.commit()
+        return lead
 
 
 def save_shopify_oauth_state(

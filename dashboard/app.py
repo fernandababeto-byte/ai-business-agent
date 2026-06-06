@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import html
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -1226,6 +1227,155 @@ def render_plan_card(plan_item, accent, is_current=False):
     )
 
 
+def lead_tenant_name(lead):
+    store_url = str(lead.get("store_url") or "").strip()
+    if store_url:
+        domain = store_url.replace("https://", "").replace("http://", "").split("/")[0]
+        clean_domain = domain.replace(".myshopify.com", "").replace("-", " ").strip()
+        if clean_domain:
+            return clean_domain.title()
+
+    email_prefix = str(lead.get("email") or "Shopify Store").split("@")[0]
+    return email_prefix.replace(".", " ").replace("_", " ").title()
+
+
+def lead_tenant_slug(value):
+    slug = re.sub(r"[^a-z0-9]+", "-", str(value).strip().lower()).strip("-")
+    return slug or "revenue-os-client"
+
+
+def render_lead_pipeline(leads, access_token):
+    if not leads:
+        st.info("No early-access leads captured yet.")
+        return
+
+    status_labels = {
+        "new": "New",
+        "qualified": "Qualified",
+        "trial_active": "Trial active",
+        "converted": "Converted",
+        "lost": "Lost",
+    }
+
+    for lead in leads[:20]:
+        lead_id = lead.get("id")
+        status = str(lead.get("status") or "new")
+        tenant_name_default = lead_tenant_name(lead)
+        slug_default = lead_tenant_slug(tenant_name_default)
+        store_url = str(lead.get("store_url") or "No store URL yet")
+        revenue_band = str(lead.get("revenue_band") or "Revenue band not provided")
+
+        with st.container(border=True):
+            top_cols = st.columns([2.2, 1.2, 1.1, 1.1], gap="small")
+            with top_cols[0]:
+                st.markdown(f"**{lead.get('email')}**")
+                st.caption(f"{store_url} · {revenue_band}")
+            with top_cols[1]:
+                st.caption("Pipeline status")
+                st.markdown(f"**{status_labels.get(status, status.title())}**")
+            with top_cols[2]:
+                st.caption("Trial workspace")
+                workspace_label = "Created" if lead.get("tenant_id") else "Not created"
+                st.markdown(f"**{workspace_label}**")
+            with top_cols[3]:
+                status_options = ["new", "qualified", "trial_active", "converted", "lost"]
+                status_choice = st.selectbox(
+                    "Set status",
+                    status_options,
+                    format_func=lambda item: status_labels.get(item, item.title()),
+                    index=status_options.index(status)
+                    if status in status_options else 0,
+                    key=f"lead_status_{lead_id}",
+                    label_visibility="collapsed",
+                )
+                if st.button("Update", key=f"lead_update_{lead_id}", use_container_width=True):
+                    try:
+                        response = requests.patch(
+                            f"{API_BASE_URL}/leads/{lead_id}",
+                            headers={"Authorization": f"Bearer {access_token}"},
+                            json={"status": status_choice},
+                            timeout=10,
+                        )
+                        if not response.ok:
+                            raise ValueError(response.json().get("detail", response.text))
+                        st.success("Lead status updated.")
+                        st.rerun()
+                    except Exception as error:
+                        st.error(f"Could not update lead: {error}")
+
+            if status != "trial_active" and not lead.get("tenant_id"):
+                with st.expander("Create 14-day trial workspace", expanded=False):
+                    col_a, col_b = st.columns(2, gap="large")
+                    with col_a:
+                        tenant_name = st.text_input(
+                            "Customer workspace name",
+                            value=tenant_name_default,
+                            key=f"lead_tenant_name_{lead_id}",
+                        )
+                        owner_name = st.text_input(
+                            "Owner name",
+                            value=tenant_name_default,
+                            key=f"lead_owner_name_{lead_id}",
+                        )
+                    with col_b:
+                        tenant_slug = st.text_input(
+                            "Workspace slug",
+                            value=slug_default,
+                            key=f"lead_tenant_slug_{lead_id}",
+                        )
+                        temp_password = st.text_input(
+                            "Temporary password",
+                            type="password",
+                            placeholder="Minimum 8 characters",
+                            key=f"lead_temp_password_{lead_id}",
+                        )
+                    plan_key = st.selectbox(
+                        "Trial plan",
+                        list(PLAN_CATALOG.keys()),
+                        format_func=lambda item: PLAN_CATALOG[item]["name"],
+                        key=f"lead_plan_key_{lead_id}",
+                    )
+                    if st.button(
+                        "Approve lead and create trial",
+                        key=f"lead_activate_trial_{lead_id}",
+                        use_container_width=True,
+                    ):
+                        if len(temp_password) < 8:
+                            st.warning("Create a temporary password with at least 8 characters.")
+                        else:
+                            try:
+                                response = requests.post(
+                                    f"{API_BASE_URL}/leads/{lead_id}/activate-trial",
+                                    headers={"Authorization": f"Bearer {access_token}"},
+                                    json={
+                                        "tenant_name": tenant_name,
+                                        "tenant_slug": tenant_slug,
+                                        "owner_name": owner_name,
+                                        "password": temp_password,
+                                        "plan_key": plan_key,
+                                    },
+                                    timeout=14,
+                                )
+                                if not response.ok:
+                                    raise ValueError(response.json().get("detail", response.text))
+                                payload = response.json()
+                                login_url = payload.get("login_url") or "https://revenue-os-dashboard.onrender.com"
+                                st.success("Trial workspace created. Send these credentials manually to the customer.")
+                                st.code(
+                                    f"Dashboard: {login_url}\nEmail: {lead.get('email')}\nTemporary password: {temp_password}",
+                                    language="text",
+                                )
+                            except Exception as error:
+                                st.error(f"Could not create trial workspace: {error}")
+            elif lead.get("tenant_id"):
+                st.success(
+                    f"Trial workspace active. Tenant ID: {lead.get('tenant_id')} · User ID: {lead.get('user_id')}"
+                )
+
+    with st.expander("Raw lead table"):
+        st.dataframe(leads, use_container_width=True, hide_index=True)
+
+
 def render_billing_center(billing_status, access_token):
     status = str(billing_status.get("status") or "trialing")
     trial_days_left = int(billing_status.get("trial_days_left") or 0)
@@ -1339,12 +1489,9 @@ def render_billing_center(billing_status, access_token):
                 section_header(
                     "EARLY ACCESS PIPELINE",
                     "Shopify Leads Captured",
-                    "Operators who requested access from the public validation page.",
+                    "Approve qualified stores, create isolated 14-day trials, then mark converted or lost.",
                 )
-                if leads:
-                    st.dataframe(leads, use_container_width=True, hide_index=True)
-                else:
-                    st.info("No early-access leads captured yet.")
+                render_lead_pipeline(leads, access_token)
         except Exception:
             pass
 

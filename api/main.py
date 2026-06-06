@@ -1,5 +1,6 @@
 import json
 import os
+import re
 
 import pandas as pd
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -10,10 +11,12 @@ from pydantic import BaseModel, Field
 from agents.agent_router import AgentRouter
 
 from database.db import (
+    attach_marketing_lead_trial,
     create_tenant,
     create_tables,
     create_user,
     create_marketing_lead,
+    get_marketing_lead,
     get_notification_deliveries,
     get_notification_preferences,
     get_revenue_alerts,
@@ -21,6 +24,7 @@ from database.db import (
     save_notification_preferences,
     save_chat_message,
     get_chat_history,
+    update_marketing_lead_status,
 )
 from services.auth_service import (
     authenticate_user,
@@ -100,6 +104,37 @@ class MarketingLeadCreate(BaseModel):
     store_url: str = ""
     revenue_band: str = ""
     source: str = "landing"
+
+
+class MarketingLeadStatusUpdate(BaseModel):
+    status: str = Field(min_length=3)
+    notes: str = ""
+
+
+class MarketingLeadTrialActivation(BaseModel):
+    tenant_name: str = ""
+    tenant_slug: str = ""
+    owner_name: str = ""
+    password: str = Field(min_length=8)
+    plan_key: str = "revenue_intelligence"
+
+
+def slugify(value: str, fallback: str = "revenue-os-client"):
+    prepared = re.sub(r"[^a-z0-9]+", "-", value.strip().lower())
+    prepared = prepared.strip("-")
+    return prepared or fallback
+
+
+def lead_display_name(lead: dict):
+    store_url = str(lead.get("store_url") or "").strip()
+    if store_url:
+        domain = store_url.replace("https://", "").replace("http://", "").split("/")[0]
+        clean_domain = domain.replace(".myshopify.com", "").replace("-", " ")
+        if clean_domain:
+            return clean_domain.title()
+
+    email_prefix = str(lead.get("email") or "Shopify Store").split("@")[0]
+    return email_prefix.replace(".", " ").replace("_", " ").title()
 
 
 def get_current_user(
@@ -283,6 +318,92 @@ def marketing_leads(
 ):
     safe_limit = min(max(limit, 1), 250)
     return {"leads": list_marketing_leads(safe_limit)}
+
+
+@app.patch("/leads/{lead_id}")
+def update_marketing_lead(
+    lead_id: int,
+    data: MarketingLeadStatusUpdate,
+    current_user: dict = Depends(require_platform_admin),
+):
+    allowed_statuses = {"new", "qualified", "trial_active", "converted", "lost"}
+    status = data.status.strip().lower()
+    if status not in allowed_statuses:
+        raise HTTPException(status_code=422, detail="Unsupported lead status.")
+
+    lead = update_marketing_lead_status(lead_id, status, data.notes)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found.")
+    return {"lead": lead}
+
+
+@app.post("/leads/{lead_id}/activate-trial")
+def activate_marketing_lead_trial(
+    lead_id: int,
+    data: MarketingLeadTrialActivation,
+    current_user: dict = Depends(require_platform_admin),
+):
+    lead = get_marketing_lead(lead_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found.")
+
+    platform_admin_email = os.getenv(
+        "PLATFORM_ADMIN_EMAIL",
+        os.getenv("BOOTSTRAP_ADMIN_EMAIL", ""),
+    ).strip().lower()
+    if platform_admin_email and lead["email"].strip().lower() == platform_admin_email:
+        raise HTTPException(
+            status_code=400,
+            detail="Use a customer email, not the platform administrator email.",
+        )
+
+    if lead.get("tenant_id") and lead.get("user_id"):
+        return {
+            "status": "trial_active",
+            "message": "Trial workspace already exists for this lead.",
+            "lead": lead,
+            "login_url": os.getenv("DASHBOARD_URL", ""),
+        }
+
+    if data.plan_key not in PLAN_CATALOG:
+        raise HTTPException(status_code=422, detail="Unknown plan key.")
+
+    tenant_name = data.tenant_name.strip() or lead_display_name(lead)
+    tenant_slug = slugify(data.tenant_slug or tenant_name)
+    owner_name = data.owner_name.strip() or lead_display_name(lead)
+
+    try:
+        tenant = create_tenant(tenant_name, tenant_slug, plan=data.plan_key)
+        user = create_user(
+            tenant_id=tenant["id"],
+            name=owner_name,
+            email=lead["email"],
+            password_hash=hash_password(data.password),
+            role="owner",
+        )
+        updated_lead = attach_marketing_lead_trial(
+            lead_id=lead["id"],
+            tenant_id=tenant["id"],
+            user_id=user["id"],
+        )
+    except Exception as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+    return {
+        "status": "trial_active",
+        "message": "14-day trial workspace created.",
+        "login_url": os.getenv("DASHBOARD_URL", ""),
+        "lead": updated_lead,
+        "tenant": tenant,
+        "user": {
+            "id": user["id"],
+            "tenant_id": user["tenant_id"],
+            "name": user["name"],
+            "email": user["email"],
+            "role": user["role"],
+            "is_active": user["is_active"],
+        },
+    }
 
 
 @app.get("/billing/status")
