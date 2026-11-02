@@ -21,6 +21,7 @@ from database.db import (
     save_shopify_sync_snapshot,
 )
 from services.notification_service import dispatch_alert_notifications
+from services.revenue_scenario import revenue_with_one_order
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -341,9 +342,8 @@ def sync_shopify_store(tenant_id: int):
     growth_rate = None
     if len(order_values) >= 2 and order_values[1] != 0:
         growth_rate = ((order_values[0] - order_values[1]) / order_values[1]) * 100
-    recent_values = order_values[:3]
-    recent_average = sum(recent_values, Decimal("0")) / len(recent_values) if recent_values else Decimal("0")
-    forecast_revenue = revenue_total + recent_average
+    # Keep the stored field name for compatibility; this is a scenario, not a forecast.
+    forecast_revenue = revenue_with_one_order(order_values)
     variants = [
         variant
         for product in products

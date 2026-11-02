@@ -1,6 +1,35 @@
 # AI Business Agent
 
-Plataforma corporativa de Inteligência Artificial para análise estratégica empresarial, automação executiva, previsão de vendas e suporte à tomada de decisão.
+Protótipo de análise empresarial com agentes de IA, dashboard e integração Shopify em desenvolvimento.
+
+## Experimentar sem loja Shopify
+
+**Protótipo em desenvolvimento.** A demonstração abaixo usa dados fictícios e não exige conta Shopify, banco de dados, credenciais ou serviços pagos. Ela demonstra o cálculo do cenário de receita; não abre o dashboard completo.
+
+Na raiz do repositório, com Python 3.10 ou superior:
+
+```bash
+python -m examples.revenue_demo
+```
+
+Resultado: R$ 1.600,00 em pedidos fictícios, média recente de R$ 200,00 e cenário de R$ 1.800,00 com um pedido hipotético adicional. Não é previsão por IA ou crescimento mensal.
+
+Veja [o guia da demonstração](docs/demonstracao-sem-shopify.md).
+
+### Testes offline
+
+Com Python 3.12, em um ambiente virtual:
+
+```bash
+python -m pip install "pandas==2.2.3"
+python -m unittest discover -s tests -v
+```
+
+Os 14 testes cobrem cálculo monetário, apresentação e sincronização simulada. O workflow `Offline revenue checks` executa os testes e a demonstração com pandas 2.2.3 (ambiente local verificado) e 3.0.2 (versão declarada em `requirements.txt`). O resultado remoto deve ser conferido na aba Actions.
+
+A integração Shopify real, a persistência real e o dashboard completo ainda não foram validados ponta a ponta. As demais seções descrevem componentes e configuração do protótipo, não uma certificação de prontidão comercial.
+
+
 
 ---
 
@@ -31,7 +60,7 @@ O sistema foi desenvolvido para transformar dados empresariais em insights estra
 - Receita média
 - Segmento Shopify com maior receita
 - Segmento Shopify em revisão operacional
-- Previsão inteligente de vendas
+- Cenário ilustrativo de receita com um pedido hipotético adicional
 
 ---
 
@@ -81,11 +110,7 @@ Analisa:
 
 ## Machine Learning
 
-Sistema de previsão inteligente utilizando:
-
-- Linear Regression
-- Forecast de vendas
-- Tendência empresarial
+Há um módulo experimental com regressão linear. Ele ainda não foi validado como previsão temporal e não fundamenta o cenário de receita do dashboard.
 
 ---
 
@@ -379,12 +404,7 @@ http://localhost:8501
 
 # Machine Learning
 
-O sistema possui:
-
-- Forecast de vendas
-- Predição de receita
-- Tendência temporal
-- Análise estatística
+Os módulos de machine learning são experimentais. O cenário exibido no dashboard usa receita importada mais a média de até três pedidos recentes, sem horizonte de previsão.
 
 ---
 

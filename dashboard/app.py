@@ -1754,14 +1754,14 @@ def render_kpi_section_stable(total_revenue, avg_ticket, forecast_value, growth_
         kpi_items = [
             ("Revenue", format_shopify_currency(revenue_total, currency_code), f"Live Shopify revenue from {order_count} synced orders", "green"),
             ("Growth", growth_value, "Change between the two most recent orders", "blue"),
-            ("Forecast", format_shopify_currency(forecast_revenue, currency_code), "Initial next-order revenue projection", "cyan"),
+            ("Order scenario", format_shopify_currency(forecast_revenue, currency_code), "Imported revenue + average of up to 3 latest orders; not a prediction", "cyan"),
             ("Risk", f"{risk_score:.0f}/100", "Operational risk from concentration and inventory", "amber"),
         ]
     else:
         kpi_items = [
             ("Revenue", "Awaiting sync", "Connect and sync Shopify to activate this indicator", None),
             ("Growth", "Not tracked", "Requires synchronized Shopify order history", None),
-            ("Forecast", "Not tracked", "Requires synchronized Shopify order values", None),
+            ("Order scenario", "Not tracked", "Requires synchronized Shopify order values", None),
             ("Risk", "Not tracked", "Requires synchronized products and inventory", None),
         ]
 
@@ -1776,20 +1776,21 @@ def render_forecast_section_stable(current_revenue, forecast_revenue, forecast_g
 
     cols = st.columns(3, gap="large")
     with cols[0]:
-        render_metric_card("Forecast Lift", f"{forecast_growth:.1f}%", description="Next-order scenario")
+        render_metric_card("Scenario difference", f"{forecast_growth:.1f}%", description="Next-order scenario")
     with cols[1]:
-        render_metric_card("Projected Revenue", format_currency(forecast_revenue), description="Synced order-value scenario")
+        render_metric_card("Revenue + one order", format_currency(forecast_revenue), description="Synced order-value scenario")
     with cols[2]:
-        render_metric_card("Scale Segment", best_category, description="Highest potential")
+        render_metric_card("Leading category", best_category, description="Highest imported category revenue")
 
     st.markdown(
         f"""
         <div class="ai-response-box">
-            <b>Predictive Shopify Analysis:</b><br><br>
+            <b>Illustrative Shopify Scenario:</b><br><br>
             • Current imported revenue: <b>{format_currency(current_revenue)}</b>.<br><br>
-            • <b>{html.escape(str(best_category))}</b> should be prioritized as the current growth opportunity.<br><br>
+            • <b>{html.escape(str(best_category))}</b> has the highest imported category revenue.<br><br>
             • <b>{html.escape(str(risk_category))}</b> should remain under operational review.<br><br>
-            • Next-order scenario: <b>{format_currency(forecast_revenue)}</b>.
+            • Revenue with one hypothetical order: <b>{format_currency(forecast_revenue)}</b>.<br><br>
+            • Assumption: one additional order equal to the average of up to 3 latest synchronized orders. No time horizon or predicted growth.
         </div>
         """,
         unsafe_allow_html=True,
@@ -2098,7 +2099,7 @@ def render_summary(best_sector, lowest_sector, total_sales, next_prediction):
             <div class="insight-item">Top Shopify segment: <strong>{html.escape(str(best_sector))}</strong>.</div>
             <div class="insight-item">Operational review segment: <strong>{html.escape(str(lowest_sector))}</strong>.</div>
             <div class="insight-item">Revenue monitored: <strong>{format_currency(total_sales)}</strong>.</div>
-            <div class="insight-item">AI forecast estimate: <strong>{format_currency(next_prediction)}</strong>.</div>
+            <div class="insight-item">Illustrative reference: <strong>{format_currency(next_prediction)}</strong>.</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -2394,7 +2395,7 @@ def render_money_moment(ctx):
                 '<div class="money-moment-desc">The operating layer is collecting live order history. Revenue, ticket size and inventory are already monitored; deeper leakage and Shopify segment recommendations will activate as the store accumulates more sales data.</div>'
                 '<div class="money-moment-grid">'
                 f'<div class="money-moment-mini"><div class="money-moment-mini-label">Average Order Value</div><div class="money-moment-mini-value">{format_shopify_currency(average_order_value, currency_code)}</div></div>'
-                f'<div class="money-moment-mini"><div class="money-moment-mini-label">Initial Forecast</div><div class="money-moment-mini-value">{format_shopify_currency(forecast_revenue, currency_code)}</div></div>'
+                f'<div class="money-moment-mini"><div class="money-moment-mini-label">One-order Scenario</div><div class="money-moment-mini-value">{format_shopify_currency(forecast_revenue, currency_code)}</div></div>'
                 f'<div class="money-moment-mini"><div class="money-moment-mini-label">Inventory Visibility</div><div class="money-moment-mini-value">{inventory_units} units</div></div>'
                 '</div>'
                 '</div>'
@@ -2763,8 +2764,8 @@ def render_ai_monitoring(ctx):
 def render_forecast_intelligence(ctx):
     section_header(
         "FORECAST",
-        "Growth Forecast",
-        "Predictive revenue view for expansion, downside monitoring and Shopify segment planning.",
+        "One-order Revenue Scenario",
+        "Illustration: imported revenue plus one hypothetical order, using the average of up to 3 latest synchronized orders. This is not an AI forecast.",
     )
 
     trend_col1, trend_col2 = st.columns([2, 1], gap="large")
@@ -2773,7 +2774,7 @@ def render_forecast_intelligence(ctx):
         projected_future = float(ctx["shopify_forecast_revenue"])
         trend_df = pd.DataFrame(
             {
-                "setor": ["Current baseline", "AI projected"],
+                "setor": ["Imported revenue", "With one hypothetical order"],
                 "vendas": [projected_now, projected_future],
             }
         )
@@ -2781,12 +2782,12 @@ def render_forecast_intelligence(ctx):
 
     with trend_col2:
         render_metric_card(
-            "Forecast Sync",
+            "Scenario basis",
             "Active",
-            description="Synced Shopify order values",
+            description="Up to 3 latest orders; no forecast horizon",
         )
         render_metric_card(
-            "Projected Lift",
+            "Scenario difference",
             f"{float(ctx['forecast_growth']):.1f}%",
             description="Next-order revenue scenario",
         )
