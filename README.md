@@ -4,7 +4,7 @@ Protótipo de análise empresarial com agentes de IA, dashboard e integração S
 
 ## Demonstração pública no navegador
 
-[Abrir o Laboratório de receita](https://babeto-revenue-demo.ruraltapir1.chatgpt.site/)
+[Abrir o Laboratório de receita](https://fernanda-babeto-ia.ruraltapir1.chatgpt.site/)
 
 Explore o cenário de receita alterando pedidos fictícios. Acesso sem login, instalação ou conta Shopify. Esta demonstração educacional apresenta apenas o cálculo ilustrativo; não é o dashboard completo nem uma previsão por IA.
 
