@@ -1,0 +1,35 @@
+name: Offline revenue checks
+
+on:
+  push:
+    branches: [main, codex/revenue-scenario-2026-11-02]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        pandas: ["2.2.3", "3.0.2"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install only offline test dependencies
+        run: python -m pip install "pandas==${{ matrix.pandas }}"
+      - name: Check Python syntax
+        run: python -m compileall -q dashboard services tests examples
+      - name: Run unit and simulated sync tests
+        run: python -m unittest discover -s tests -v
+      - name: Run synthetic revenue demonstration
+        run: python -m examples.revenue_demo
